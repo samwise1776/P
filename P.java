@@ -19,8 +19,7 @@ public class P {
     private static int maxMoneyCap = 1000;
     
     // Help button state
-    private static int helpUsesLeft = 10;
-    private static int helpActiveTurns = 0;
+    private static final int HELP_DISCOUNT = 10000;
 
     public static void main(String[] args) {
         JFrame frame = new JFrame("FriendRun");
@@ -85,16 +84,10 @@ public class P {
                 g2d.drawString("Money: $" + money + " / $" + maxMoneyCap, 20, 30);
                 g2d.drawString("Steps: " + steps, 20, 55);
                 g2d.drawString("Money/Step: $" + moneyMultiplier, 20, 80);
-                g2d.drawString("Help Uses Left: " + helpUsesLeft, 20, 105);
-
-                if (helpActiveTurns > 0) {
-                    g2d.setColor(new Color(0, 150, 0));
-                    g2d.drawString("FREE SHOP! " + helpActiveTurns + " turns left", 20, 130);
-                }
 
                 if (steps <= 0) {
                     g2d.setColor(Color.RED);
-                    g2d.drawString("OUT OF STEPS! Buy more below.", 20, 155);
+                    g2d.drawString("OUT OF STEPS! Buy more below.", 20, 105);
                 }
             }
         };
@@ -105,12 +98,11 @@ public class P {
         JButton buyStepsBtn = new JButton("Buy 10 Steps ($" + stepCost + ")");
         JButton buyMaxMoneyBtn = new JButton("Upgrade Max Money ($" + maxMoneyCost + ")");
         JButton buyMultiplierBtn = new JButton("Buy +10 Money/Step ($" + multiplierCost + ")");
-        JButton helpBtn = new JButton("Help - Free Shop 5 Turns (Left: " + helpUsesLeft + ")");
+        JButton helpBtn = new JButton("Help (-$" + HELP_DISCOUNT + " all prices)");
 
         buyStepsBtn.addActionListener(e -> {
-            int cost = helpActiveTurns > 0 ? 0 : stepCost;
-            if (money >= cost) {
-                money -= cost;
+            if (money >= stepCost) {
+                money -= stepCost;
                 steps += 10;
                 stepCost += 5;
                 buyStepsBtn.setText("Buy 10 Steps ($" + stepCost + ")");
@@ -121,9 +113,8 @@ public class P {
         });
 
         buyMaxMoneyBtn.addActionListener(e -> {
-            int cost = helpActiveTurns > 0 ? 0 : maxMoneyCost;
-            if (money >= cost) {
-                money -= cost;
+            if (money >= maxMoneyCost) {
+                money -= maxMoneyCost;
                 maxMoneyCap += 1000;
                 maxMoneyCost *= 2;
                 buyMaxMoneyBtn.setText("Upgrade Max Money ($" + maxMoneyCost + ")");
@@ -134,9 +125,8 @@ public class P {
         });
 
         buyMultiplierBtn.addActionListener(e -> {
-            int cost = helpActiveTurns > 0 ? 0 : multiplierCost;
-            if (money >= cost) {
-                money -= cost;
+            if (money >= multiplierCost) {
+                money -= multiplierCost;
                 moneyMultiplier += 10;
                 multiplierCost *= 2;
                 buyMultiplierBtn.setText("Buy +10 Money/Step ($" + multiplierCost + ")");
@@ -147,13 +137,16 @@ public class P {
         });
 
         helpBtn.addActionListener(e -> {
-            if (helpUsesLeft > 0) {
-                helpUsesLeft--;
-                helpActiveTurns = 5;
-                helpBtn.setText("Help - Free Shop 5 Turns (Left: " + helpUsesLeft + ")");
+            if (money > 100000) {
+                stepCost -= HELP_DISCOUNT;
+                maxMoneyCost -= HELP_DISCOUNT;
+                multiplierCost -= HELP_DISCOUNT;
+                buyStepsBtn.setText("Buy 10 Steps ($" + stepCost + ")");
+                buyMaxMoneyBtn.setText("Upgrade Max Money ($" + maxMoneyCost + ")");
+                buyMultiplierBtn.setText("Buy +10 Money/Step ($" + multiplierCost + ")");
                 paint.repaint();
             } else {
-                JOptionPane.showMessageDialog(frame, "No more help left!");
+                JOptionPane.showMessageDialog(frame, "Need more than $100000 to use help!");
             }
         });
 
@@ -209,10 +202,6 @@ public class P {
         circleY = Math.max(0, Math.min(circleY + dy, panel.getHeight() - 90));
 
         steps--;
-
-        if (helpActiveTurns > 0) {
-            helpActiveTurns--;
-        }
 
         if (money < maxMoneyCap) {
             money += moneyMultiplier;

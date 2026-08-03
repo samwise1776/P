@@ -1,2 +1,2 @@
-exec sudo apt update
-exec sudo apt install default-jdk
+sudo apt update
+sudo apt install -y default-jdk

@@ -1,1 +1,1 @@
-exec java -jar P.java
+exec java P.java
