@@ -111,6 +111,10 @@ public class P {
         loadData();
 
         JFrame frame = new JFrame("FriendRun");
+        try {
+            frame.setIconImage(java.awt.Toolkit.getDefaultToolkit().getImage("friendrun.png"));
+        } catch (Exception ignored) {
+        }
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setSize(800, 700);
         frame.setResizable(false);
@@ -561,6 +565,8 @@ public class P {
         im.put(KeyStroke.getKeyStroke(KeyEvent.VK_Q, 0), "prevWeapon");
         im.put(KeyStroke.getKeyStroke('E'), "nextWeapon");
         im.put(KeyStroke.getKeyStroke(KeyEvent.VK_E, 0), "nextWeapon");
+        im.put(KeyStroke.getKeyStroke('N'), "nextWeapon");
+        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_N, 0), "nextWeapon");
 
         am.put("attack", new AbstractAction() {
             public void actionPerformed(ActionEvent e) {
