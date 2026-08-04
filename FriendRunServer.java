@@ -151,7 +151,7 @@ public class FriendRunServer {
                     else bMoney = m;
                 } catch (Exception ignored) {}
                 Client to = (from == a) ? b : a;
-                to.send("O " + p[1] + " " + p[2] + " " + p[3] + " " + p[4] + " " + p[5]);
+                to.send("O " + msg.substring(2).trim());
             }
         }
 

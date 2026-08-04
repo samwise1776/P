@@ -43,11 +43,9 @@ public class P {
     static boolean[] areaBought = new boolean[areaX.length];
 
     // ---- multiplayer state ----
-    static int p1x, p1y, p2x, p2y;
-    static int p1Steps, p2Steps, p1Money, p2Money, p1Jumps, p2Jumps;
-    static double p1velY, p2velY;
-    static boolean p1Ground, p2Ground;
-    static int p1Mult, p2Mult;
+    static PlayerState local = new PlayerState();
+    static PlayerState rival = new PlayerState();
+    static volatile PlayerState remote = new PlayerState();
     static int timeLimit, timeLeft;
     static long matchStart;
     static int botCounter;
@@ -65,7 +63,6 @@ public class P {
     static volatile boolean netMatchActive;
     static volatile boolean netRemoteSeen;
     static volatile boolean netPlaced;
-    static volatile int remoteX, remoteY, remoteSteps, remoteMoney, remoteJumps;
     static volatile String remoteName = "Rival";
     static volatile int remotePoints = 0;
     static volatile int netTimeLeft = 60;
@@ -471,26 +468,18 @@ public class P {
                 int h = getHeight();
                 int w = getWidth();
                 drawBackground(g2d, w, h);
+                drawZones(g2d, h, local, rival);
 
-                // All boost zones active in multiplayer
-                int groundTop = h - 100;
-                for (int i = 0; i < areaX.length; i++) {
-                    g2d.setColor(new Color(255, 215, 0, 170));
-                    g2d.fillRect(areaX[i], groundTop - 70, areaWidth, 70);
-                    g2d.setColor(new Color(180, 140, 0));
-                    g2d.drawString("x2", areaX[i] + 35, groundTop - 30);
-                }
-
-                drawCharacter(g2d, p1x, p1y, new Color(40, 100, 200));
-                drawCharacter(g2d, p2x, p2y, new Color(200, 60, 60));
+                drawCharacter(g2d, local.x, local.y, new Color(40, 100, 200));
+                drawCharacter(g2d, rival.x, rival.y, new Color(200, 60, 60));
 
                 // UI
                 g2d.setFont(new Font("Arial", Font.BOLD, 18));
                 g2d.setColor(Color.BLACK);
                 g2d.drawString("Time left: " + Math.max(0, timeLeft) + "s", 20, 30);
-                g2d.drawString(playerName + " (You): $" + p1Money, 20, 55);
-                g2d.drawString(opponentName + ": $" + p2Money, 20, 80);
-                g2d.drawString("Move with A/D + jump with SPACE/W to earn money!", 20, 105);
+                g2d.drawString(playerName + " (You): $" + local.money + " | Steps: " + local.steps + " | +$" + local.moneyMultiplier + "/step", 20, 55);
+                g2d.drawString(opponentName + ": $" + rival.money, 20, 80);
+                g2d.drawString("Move with A/D + jump with SPACE/W. Use the shop below!", 20, 105);
             }
         };
         multiPaint.setBackground(Color.WHITE);
@@ -502,12 +491,10 @@ public class P {
             matchTimer.stop();
             layoutCards.show(rootCards, "start");
         });
-        JPanel bottom = new JPanel();
-        bottom.add(endBtn);
 
         JPanel matchPanel = new JPanel(new BorderLayout());
         matchPanel.add(multiPaint, BorderLayout.CENTER);
-        matchPanel.add(bottom, BorderLayout.SOUTH);
+        matchPanel.add(buildPlayerShop(frame, local, multiPaint, "Your Shop", endBtn), BorderLayout.SOUTH);
         rootCards.add(matchPanel, "multi");
 
         InputMap im = multiPaint.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
@@ -525,30 +512,19 @@ public class P {
         am.put("p1jump", new AbstractAction() {
             public void actionPerformed(ActionEvent e) {
                 if (matchOver) return;
-                if (p1Ground && p1Jumps > 0) {
-                    p1velY = -13;
-                    p1Ground = false;
-                    p1Jumps--;
-                    p1Steps += 2;
-                }
+                jumpPlayer(local);
             }
         });
         am.put("p1left", new AbstractAction() {
             public void actionPerformed(ActionEvent e) {
                 if (matchOver) return;
-                if (p1Steps <= 0) return;
-                p1x = clamp(p1x - 15, 0, multiPaint.getWidth() - 50);
-                p1Steps--;
-                p1Money += p1Mult * (inZone(p1x) ? 2 : 1);
+                movePlayer(local, -15, multiPaint.getWidth());
             }
         });
         am.put("p1right", new AbstractAction() {
             public void actionPerformed(ActionEvent e) {
                 if (matchOver) return;
-                if (p1Steps <= 0) return;
-                p1x = clamp(p1x + 15, 0, multiPaint.getWidth() - 50);
-                p1Steps--;
-                p1Money += p1Mult * (inZone(p1x) ? 2 : 1);
+                movePlayer(local, 15, multiPaint.getWidth());
             }
         });
 
@@ -565,48 +541,31 @@ public class P {
             if (!playersPlaced) {
                 int g = multiPaint.getHeight() - 185;
                 if (g > 0) {
-                    p1y = g;
-                    p2y = g;
-                    p1Ground = true;
-                    p2Ground = true;
+                    local.y = g;
+                    rival.y = g;
+                    local.onGround = true;
+                    rival.onGround = true;
                     playersPlaced = true;
                 }
             }
 
-            // physics for both
-            p1velY += 0.8;
-            p1y += (int) p1velY;
-            int gY = multiPaint.getHeight() - 185;
-            if (p1y >= gY) {
-                p1y = gY;
-                p1velY = 0;
-                p1Ground = true;
-            }
-
-            p2velY += 0.8;
-            p2y += (int) p2velY;
-            if (p2y >= gY) {
-                p2y = gY;
-                p2velY = 0;
-                p2Ground = true;
-            }
+            applyGravity(local, multiPaint.getHeight());
+            applyGravity(rival, multiPaint.getHeight());
+            local.x = clamp(local.x, 0, multiPaint.getWidth() - 50);
+            rival.x = clamp(rival.x, 0, multiPaint.getWidth() - 50);
 
             // bot AI
             botCounter++;
             if (botCounter % 8 == 0) {
                 int dir = (int) (Math.random() * 3) - 1;
-                if (dir != 0 && p2Steps > 0) {
-                    p2x = clamp(p2x + dir * 15, 0, multiPaint.getWidth() - 50);
-                    p2Steps--;
-                    p2Money += p2Mult * (inZone(p2x) ? 2 : 1);
+                if (dir != 0 && rival.steps > 0) {
+                    movePlayer(rival, dir * 15, multiPaint.getWidth());
                 }
-                if (Math.random() < 0.2 && p2Ground && p2Jumps > 0) {
-                    p2velY = -13;
-                    p2Ground = false;
-                    p2Jumps--;
-                    p2Steps += 2;
+                if (Math.random() < 0.2 && rival.onGround && rival.jumpsLeft > 0) {
+                    jumpPlayer(rival);
                 }
             }
+            botShop(rival);
 
             multiPaint.repaint();
         });
@@ -626,22 +585,12 @@ public class P {
         opponentPoints = oPoints;
         timeLimit = lim;
 
-        p1x = 200;
-        p2x = 500;
-        p1y = 0;
-        p2y = 0;
-        p1Steps = 30;
-        p2Steps = 30 + opponentPoints / 10;
-        p1Money = 0;
-        p2Money = 0;
-        p1Jumps = 50;
-        p2Jumps = 50;
-        p1velY = 0;
-        p2velY = 0;
-        p1Ground = false;
-        p2Ground = false;
-        p1Mult = 10;
-        p2Mult = 10 + opponentPoints / 5;
+        local.reset();
+        rival.reset();
+        local.x = 200;
+        rival.x = 500;
+        rival.moneyMultiplier = 10 + opponentPoints / 5;
+        rival.steps = 30 + opponentPoints / 10;
         timeLeft = timeLimit;
         matchOver = false;
         botCounter = 0;
@@ -670,17 +619,17 @@ public class P {
         matchOver = true;
         matchTimer.stop();
 
-        boolean win = p1Money > p2Money;
+        boolean win = local.money > rival.money;
         String msg;
         if (win) {
             int gain = 1 + Math.max(0, (opponentPoints - playerPoints) / 5);
             playerPoints += gain;
             setPoints(playerName, playerPoints);
             saveData();
-            msg = "You win! $" + p1Money + " vs $" + p2Money + "\nYou earned " + gain + " point(s)!";
+            msg = "You win! $" + local.money + " vs $" + rival.money + "\nYou earned " + gain + " point(s)!";
             startPointsLabel.setText("Points: " + playerPoints);
         } else {
-            msg = "You lose! $" + p1Money + " vs $" + p2Money + "\n" + opponentName + " wins.";
+            msg = "You lose! $" + local.money + " vs $" + rival.money + "\n" + opponentName + " wins.";
         }
         JOptionPane.showMessageDialog(multiPaint, msg);
         layoutCards.show(rootCards, "start");
@@ -698,42 +647,33 @@ public class P {
                 int h = getHeight();
                 int w = getWidth();
                 drawBackground(g2d, w, h);
+                drawZones(g2d, h, local, remote);
 
-                int groundTop = h - 100;
-                for (int i = 0; i < areaX.length; i++) {
-                    g2d.setColor(new Color(255, 215, 0, 170));
-                    g2d.fillRect(areaX[i], groundTop - 70, areaWidth, 70);
-                    g2d.setColor(new Color(180, 140, 0));
-                    g2d.drawString("x2", areaX[i] + 35, groundTop - 30);
-                }
-
-                drawCharacter(g2d, p1x, p1y, new Color(40, 100, 200));
-                drawCharacter(g2d, remoteX, remoteY, new Color(200, 60, 60));
+                drawCharacter(g2d, local.x, local.y, new Color(40, 100, 200));
+                drawCharacter(g2d, remote.x, remote.y, new Color(200, 60, 60));
 
                 g2d.setFont(new Font("Arial", Font.BOLD, 18));
                 g2d.setColor(Color.BLACK);
                 g2d.drawString("Time left: " + Math.max(0, netTimeLeft) + "s", 20, 30);
-                g2d.drawString(playerName + " (You): $" + p1Money, 20, 55);
-                g2d.drawString(remoteName + ": $" + remoteMoney, 20, 80);
-                g2d.drawString("Move with A/D + jump with SPACE/W to earn money!", 20, 105);
+                g2d.drawString(playerName + " (You): $" + local.money + " | Steps: " + local.steps + " | +$" + local.moneyMultiplier + "/step", 20, 55);
+                g2d.drawString(remoteName + ": $" + remote.money, 20, 80);
+                g2d.drawString("Move with A/D + jump with SPACE/W. Use the shop below!", 20, 105);
             }
         };
         netPaint.setBackground(Color.WHITE);
 
-        JButton endBtn = new JButton("Leave Match");
-        endBtn.addActionListener(e -> {
+        JButton leaveBtn = new JButton("Leave Match");
+        leaveBtn.addActionListener(e -> {
             if (!netMatchActive) return;
             netMatchActive = false;
             if (netTimer != null) netTimer.stop();
             closeNet();
             layoutCards.show(rootCards, "start");
         });
-        JPanel bottom = new JPanel();
-        bottom.add(endBtn);
 
         JPanel netPanel = new JPanel(new BorderLayout());
         netPanel.add(netPaint, BorderLayout.CENTER);
-        netPanel.add(bottom, BorderLayout.SOUTH);
+        netPanel.add(buildPlayerShop(frame, local, netPaint, "Your Shop", leaveBtn), BorderLayout.SOUTH);
         rootCards.add(netPanel, "net");
 
         InputMap im = netPaint.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
@@ -751,30 +691,19 @@ public class P {
         am.put("netjump", new AbstractAction() {
             public void actionPerformed(ActionEvent e) {
                 if (!netMatchActive) return;
-                if (p1Ground && p1Jumps > 0) {
-                    p1velY = -13;
-                    p1Ground = false;
-                    p1Jumps--;
-                    p1Steps += 2;
-                }
+                jumpPlayer(local);
             }
         });
         am.put("netleft", new AbstractAction() {
             public void actionPerformed(ActionEvent e) {
                 if (!netMatchActive) return;
-                if (p1Steps <= 0) return;
-                p1x = clamp(p1x - 15, 0, netPaint.getWidth() - 50);
-                p1Steps--;
-                p1Money += p1Mult * (inZone(p1x) ? 2 : 1);
+                movePlayer(local, -15, netPaint.getWidth());
             }
         });
         am.put("netright", new AbstractAction() {
             public void actionPerformed(ActionEvent e) {
                 if (!netMatchActive) return;
-                if (p1Steps <= 0) return;
-                p1x = clamp(p1x + 15, 0, netPaint.getWidth() - 50);
-                p1Steps--;
-                p1Money += p1Mult * (inZone(p1x) ? 2 : 1);
+                movePlayer(local, 15, netPaint.getWidth());
             }
         });
 
@@ -784,27 +713,20 @@ public class P {
             if (!netPlaced) {
                 int g = netPaint.getHeight() - 185;
                 if (g > 0) {
-                    p1y = g;
-                    p1Ground = true;
+                    local.y = g;
+                    local.onGround = true;
                     netPlaced = true;
                 }
             }
 
-            p1velY += 0.8;
-            p1y += (int) p1velY;
-            int gY = netPaint.getHeight() - 185;
-            if (p1y >= gY) {
-                p1y = gY;
-                p1velY = 0;
-                p1Ground = true;
-            }
-            p1x = clamp(p1x, 0, netPaint.getWidth() - 50);
+            applyGravity(local, netPaint.getHeight());
+            local.x = clamp(local.x, 0, netPaint.getWidth() - 50);
 
             if (!netRemoteSeen) {
                 int g = netPaint.getHeight() - 185;
                 if (g > 0) {
-                    remoteY += 0.8;
-                    if (remoteY >= g) remoteY = g;
+                    remote.y += 0.8;
+                    if (remote.y >= g) remote.y = g;
                 }
             }
 
@@ -861,19 +783,10 @@ public class P {
             netTimeLeft = Integer.parseInt(p[2]);
             remotePoints = p.length > 3 ? Integer.parseInt(p[3]) : 0;
 
-            p1x = 200;
-            p1y = 0;
-            p1Steps = 30;
-            p1Money = 0;
-            p1Jumps = 50;
-            p1velY = 0;
-            p1Ground = false;
-            p1Mult = 10;
-            remoteX = 500;
-            remoteY = 0;
-            remoteSteps = 30;
-            remoteMoney = 0;
-            remoteJumps = 50;
+            local.reset();
+            remote.reset();
+            local.x = 200;
+            remote.x = 500;
             netRemoteSeen = false;
             netPlaced = false;
             netSendCounter = 0;
@@ -885,12 +798,15 @@ public class P {
         }
         if (msg.startsWith("O ")) {
             String[] p = msg.split("\\s+");
-            if (p.length >= 6) {
-                remoteX = Integer.parseInt(p[1]);
-                remoteY = Integer.parseInt(p[2]);
-                remoteSteps = Integer.parseInt(p[3]);
-                remoteMoney = Integer.parseInt(p[4]);
-                remoteJumps = Integer.parseInt(p[5]);
+            if (p.length >= 9) {
+                remote.x = Integer.parseInt(p[1]);
+                remote.y = Integer.parseInt(p[2]);
+                remote.steps = Integer.parseInt(p[3]);
+                remote.money = Integer.parseInt(p[4]);
+                remote.jumpsLeft = Integer.parseInt(p[5]);
+                remote.moneyMultiplier = Integer.parseInt(p[6]);
+                remote.maxMoneyCap = Integer.parseInt(p[7]);
+                setAreaBits(remote, Integer.parseInt(p[8]));
                 netRemoteSeen = true;
             }
             return;
@@ -926,7 +842,8 @@ public class P {
         if (!netMatchActive || netOut == null) return;
         netSendCounter++;
         if (netSendCounter % 4 != 0) return;
-        netOut.println("S " + p1x + " " + p1y + " " + p1Steps + " " + p1Money + " " + p1Jumps);
+        netOut.println("S " + local.x + " " + local.y + " " + local.steps + " " + local.money + " " + local.jumpsLeft
+                + " " + local.moneyMultiplier + " " + local.maxMoneyCap + " " + areaBitsOf(local));
         netOut.flush();
     }
 
@@ -1062,6 +979,239 @@ public class P {
             }
         }
         return false;
+    }
+
+    // ================= PLAYER STATE & MULTIPLAYER HELPERS =================
+    static class PlayerState {
+        int x = 200, y = 0;
+        int steps = 30, money = 0, jumpsLeft = 50;
+        int moneyMultiplier = 10, maxMoneyCap = 10000;
+        int stepCost = 10, maxMoneyCost = 25, multiplierCost = 25;
+        double velY = 0;
+        boolean onGround = false;
+        boolean[] areaOwned = new boolean[areaX.length];
+
+        void reset() {
+            x = 200;
+            y = 0;
+            steps = 30;
+            money = 0;
+            jumpsLeft = 50;
+            moneyMultiplier = 10;
+            maxMoneyCap = 10000;
+            stepCost = 10;
+            maxMoneyCost = 25;
+            multiplierCost = 25;
+            velY = 0;
+            onGround = false;
+            areaOwned = new boolean[areaX.length];
+        }
+    }
+
+    static void applyGravity(PlayerState ps, int panelHeight) {
+        ps.velY += 0.8;
+        ps.y += (int) ps.velY;
+        int gY = panelHeight - 185;
+        if (ps.y >= gY) {
+            ps.y = gY;
+            ps.velY = 0;
+            ps.onGround = true;
+        }
+    }
+
+    static void movePlayer(PlayerState ps, int dx, int panelWidth) {
+        if (ps.steps <= 0) return;
+        ps.x = clamp(ps.x + dx, 0, panelWidth - 50);
+        ps.steps--;
+        if (ps.money < ps.maxMoneyCap) {
+            int gain = ps.moneyMultiplier * (ownsZone(ps, ps.x) ? 2 : 1);
+            ps.money = Math.min(ps.maxMoneyCap, ps.money + gain);
+        }
+    }
+
+    static void jumpPlayer(PlayerState ps) {
+        if (ps.onGround && ps.jumpsLeft > 0) {
+            ps.velY = -13;
+            ps.onGround = false;
+            ps.jumpsLeft--;
+            ps.steps += 2;
+        }
+    }
+
+    static boolean inZoneAt(int x, int i) {
+        return x + 45 > areaX[i] && x < areaX[i] + areaWidth;
+    }
+
+    static boolean ownsZone(PlayerState ps, int x) {
+        for (int i = 0; i < areaX.length; i++) {
+            if (ps.areaOwned[i] && inZoneAt(x, i)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static int areaBitsOf(PlayerState ps) {
+        int bits = 0;
+        for (int i = 0; i < areaX.length; i++) {
+            if (ps.areaOwned[i]) bits |= (1 << i);
+        }
+        return bits;
+    }
+
+    static void setAreaBits(PlayerState ps, int bits) {
+        for (int i = 0; i < areaX.length; i++) {
+            ps.areaOwned[i] = (bits & (1 << i)) != 0;
+        }
+    }
+
+    static void drawZones(Graphics2D g2d, int h, PlayerState a, PlayerState b) {
+        int groundTop = h - 100;
+        for (int i = 0; i < areaX.length; i++) {
+            boolean aOwn = a.areaOwned[i];
+            boolean bOwn = b.areaOwned[i];
+            if (aOwn && bOwn) {
+                g2d.setColor(new Color(255, 215, 0, 170));
+                g2d.fillRect(areaX[i], groundTop - 70, areaWidth, 70);
+                g2d.setColor(new Color(150, 110, 0));
+                g2d.drawString("x2", areaX[i] + 35, groundTop - 30);
+            } else if (aOwn) {
+                g2d.setColor(new Color(40, 100, 200, 170));
+                g2d.fillRect(areaX[i], groundTop - 70, areaWidth, 70);
+                g2d.setColor(Color.WHITE);
+                g2d.drawString("x2", areaX[i] + 35, groundTop - 30);
+            } else if (bOwn) {
+                g2d.setColor(new Color(200, 60, 60, 170));
+                g2d.fillRect(areaX[i], groundTop - 70, areaWidth, 70);
+                g2d.setColor(Color.WHITE);
+                g2d.drawString("x2", areaX[i] + 35, groundTop - 30);
+            } else {
+                g2d.setColor(new Color(255, 255, 255, 190));
+                g2d.fillRect(areaX[i], groundTop - 70, areaWidth, 70);
+                g2d.setColor(Color.BLACK);
+                g2d.drawRect(areaX[i], groundTop - 70, areaWidth, 70);
+                g2d.drawString("$" + AREA_COST, areaX[i] + 22, groundTop - 30);
+            }
+        }
+    }
+
+    static JPanel buildPlayerShop(JFrame frame, PlayerState ps, JComponent view, String ownerLabel, JButton extraButton) {
+        JPanel sp = new JPanel(new FlowLayout());
+        JLabel lab = new JLabel(ownerLabel + ":");
+        lab.setFont(new Font("Arial", Font.BOLD, 13));
+        sp.add(lab);
+
+        JButton buySteps = new JButton("Buy 10 Steps ($" + ps.stepCost + ")");
+        JButton buyMax = new JButton("Upgrade Max Money ($" + ps.maxMoneyCost + ")");
+        JButton buyMult = new JButton("Buy +10 Money/Step ($" + ps.multiplierCost + ")");
+        JButton helpBtn = new JButton("Help (-$" + HELP_DISCOUNT + ")");
+        JButton[] areaBtns = new JButton[3];
+
+        buySteps.addActionListener(e -> {
+            if (ps.money >= ps.stepCost) {
+                ps.money -= ps.stepCost;
+                ps.steps += 10;
+                ps.stepCost += 5;
+                buySteps.setText("Buy 10 Steps ($" + ps.stepCost + ")");
+                view.repaint();
+            } else {
+                JOptionPane.showMessageDialog(frame, "Not enough money!");
+            }
+        });
+        buyMax.addActionListener(e -> {
+            if (ps.money >= ps.maxMoneyCost) {
+                ps.money -= ps.maxMoneyCost;
+                ps.maxMoneyCap += 1000;
+                ps.maxMoneyCost *= 2;
+                buyMax.setText("Upgrade Max Money ($" + ps.maxMoneyCost + ")");
+                view.repaint();
+            } else {
+                JOptionPane.showMessageDialog(frame, "Not enough money!");
+            }
+        });
+        buyMult.addActionListener(e -> {
+            if (ps.money >= ps.multiplierCost) {
+                ps.money -= ps.multiplierCost;
+                ps.moneyMultiplier += 10;
+                ps.multiplierCost *= 2;
+                buyMult.setText("Buy +10 Money/Step ($" + ps.multiplierCost + ")");
+                view.repaint();
+            } else {
+                JOptionPane.showMessageDialog(frame, "Not enough money!");
+            }
+        });
+        helpBtn.addActionListener(e -> {
+            if (ps.money > 100000) {
+                ps.stepCost -= HELP_DISCOUNT;
+                ps.maxMoneyCost -= HELP_DISCOUNT;
+                ps.multiplierCost -= HELP_DISCOUNT;
+                buySteps.setText("Buy 10 Steps ($" + ps.stepCost + ")");
+                buyMax.setText("Upgrade Max Money ($" + ps.maxMoneyCost + ")");
+                buyMult.setText("Buy +10 Money/Step ($" + ps.multiplierCost + ")");
+                view.repaint();
+            } else {
+                JOptionPane.showMessageDialog(frame, "Need more than $100000 to use help!");
+            }
+        });
+        for (int i = 0; i < 3; i++) {
+            final int idx = i;
+            areaBtns[i] = new JButton("Buy Area " + (idx + 1) + " ($" + AREA_COST + ")");
+            areaBtns[i].addActionListener(e -> {
+                if (ps.areaOwned[idx]) return;
+                if (!inZoneAt(ps.x, idx)) {
+                    JOptionPane.showMessageDialog(frame, "Stand inside area " + (idx + 1) + " to buy it!");
+                    return;
+                }
+                if (ps.money >= AREA_COST) {
+                    ps.money -= AREA_COST;
+                    ps.areaOwned[idx] = true;
+                    areaBtns[idx].setText("Area " + (idx + 1) + " Owned");
+                    view.repaint();
+                } else {
+                    JOptionPane.showMessageDialog(frame, "Not enough money!");
+                }
+            });
+        }
+
+        sp.add(buySteps);
+        sp.add(buyMax);
+        sp.add(buyMult);
+        for (int i = 0; i < 3; i++) sp.add(areaBtns[i]);
+        sp.add(helpBtn);
+        if (extraButton != null) sp.add(extraButton);
+        return sp;
+    }
+
+    static void botShop(PlayerState b) {
+        if (b.money >= b.maxMoneyCost) {
+            b.money -= b.maxMoneyCost;
+            b.maxMoneyCap += 1000;
+            b.maxMoneyCost *= 2;
+        }
+        if (b.steps < 15 && b.money >= b.stepCost) {
+            b.money -= b.stepCost;
+            b.steps += 10;
+            b.stepCost += 5;
+        }
+        if (b.money >= b.multiplierCost && Math.random() < 0.03) {
+            b.money -= b.multiplierCost;
+            b.moneyMultiplier += 10;
+            b.multiplierCost *= 2;
+        }
+        if (b.money >= AREA_COST) {
+            for (int i = 0; i < 3; i++) {
+                if (!b.areaOwned[i] && inZoneAt(b.x, i)) {
+                    b.money -= AREA_COST;
+                    b.areaOwned[i] = true;
+                    break;
+                }
+            }
+        }
+        if (b.money > 100000) {
+            b.stepCost -= HELP_DISCOUNT;
+            b.maxMoneyCost -= HELP_DISCOUNT;
+            b.multiplierCost -= HELP_DISCOUNT;
+        }
     }
 
     // ================= PERSISTENCE =================
