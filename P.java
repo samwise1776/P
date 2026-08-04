@@ -48,7 +48,7 @@ public class P {
     static int levelKills = 0;
     static int totalKills = 0;
     static int kills = 0;
-    static Weapon equippedWeapon = new Sword();
+    static Weapon equippedWeapon = new Weapon("Sword", 35, 85, false, 500, 0, 0, "A balanced starting blade. 35 dmg.");
     static Weapon currentWeapon = equippedWeapon;
     static int facing = 1;
     static long lastAttackMs = 0;
@@ -1463,7 +1463,7 @@ public class P {
     }
 
     // ================= WEAPONS =================
-    static abstract class Weapon {
+    static class Weapon {
         String name;
         int damage;
         int range;
@@ -1473,6 +1473,7 @@ public class P {
         int projSpeed;
         String desc;
         int bonus = 0;
+        int style = 0;
 
         Weapon(String name, int damage, int range, boolean ranged, long cooldownMs, int price, int projSpeed, String desc) {
             this.name = name;
@@ -1488,32 +1489,148 @@ public class P {
         int damageValue() {
             return damage + bonus;
         }
+
+        Weapon copy() {
+            Weapon nw = new Weapon(name, damage, range, ranged, cooldownMs, price, projSpeed, desc);
+            nw.bonus = bonus;
+            nw.style = style;
+            return nw;
+        }
     }
 
-    static class Sword extends Weapon { Sword() { super("Sword", 35, 85, false, 500, 0, 0, "A balanced starting blade. 35 dmg."); } }
-    static class Spear extends Weapon { Spear() { super("Spear", 45, 130, false, 550, 80, 0, "Long reach melee. 45 dmg."); } }
-    static class Axe extends Weapon { Axe() { super("Axe", 60, 85, false, 750, 50, 0, "Heavy melee. 60 dmg."); } }
-    static class Hammer extends Weapon { Hammer() { super("Hammer", 95, 95, false, 1200, 200, 0, "Massive slow smash. 95 dmg."); } }
-    static class Bow extends Weapon { Bow() { super("Bow", 30, 650, true, 450, 60, 12, "Quick long-range arrows. 30 dmg."); } }
-    static class Crossbow extends Weapon { Crossbow() { super("Crossbow", 50, 700, true, 900, 150, 14, "Powerful ranged bolts. 50 dmg."); } }
-    static class MagicStaff extends Weapon { MagicStaff() { super("Magic Staff", 80, 550, true, 1100, 300, 9, "Slow magic bolts. 80 dmg."); } }
-
-    static final Weapon[] ALL_WEAPONS = {new Sword(), new Spear(), new Axe(), new Hammer(), new Bow(), new Crossbow(), new MagicStaff()};
-
-    static Weapon weaponOf(Class<? extends Weapon> cls) {
-        if (cls.equals(Spear.class)) return new Spear();
-        if (cls.equals(Axe.class)) return new Axe();
-        if (cls.equals(Hammer.class)) return new Hammer();
-        if (cls.equals(Bow.class)) return new Bow();
-        if (cls.equals(Crossbow.class)) return new Crossbow();
-        if (cls.equals(MagicStaff.class)) return new MagicStaff();
-        return new Sword();
+    static Weapon mk(String name, int dmg, int range, boolean ranged, long cd, int price, int proj, String desc, int style) {
+        Weapon nw = new Weapon(name, dmg, range, ranged, cd, price, proj, desc);
+        nw.style = style;
+        return nw;
     }
+
+    static Weapon defaultWeapon() {
+        return ALL_WEAPONS[0].copy();
+    }
+
+    static final Weapon[] ALL_WEAPONS = {
+        // ----- originals -----
+        mk("Sword", 35, 85, false, 500, 0, 0, "A balanced starting blade. 35 dmg.", 0),
+        mk("Spear", 45, 130, false, 550, 80, 0, "Long reach melee. 45 dmg.", 0),
+        mk("Axe", 60, 85, false, 750, 50, 0, "Heavy melee. 60 dmg.", 0),
+        mk("Hammer", 95, 95, false, 1200, 200, 0, "Massive slow smash. 95 dmg.", 0),
+        mk("Bow", 30, 650, true, 450, 60, 12, "Quick long-range arrows. 30 dmg.", 0),
+        mk("Crossbow", 50, 700, true, 900, 150, 14, "Powerful ranged bolts. 50 dmg.", 1),
+        mk("Magic Staff", 80, 550, true, 1100, 300, 9, "Slow magic bolts. 80 dmg.", 2),
+        // ----- blades -----
+        mk("Dagger", 20, 70, false, 350, 30, 0, "Rapid stabs. 20 dmg.", 0),
+        mk("Dirk", 26, 70, false, 400, 35, 0, "A quick little blade. 26 dmg.", 0),
+        mk("Stiletto", 24, 75, false, 380, 30, 0, "Sneaky and fast. 24 dmg.", 0),
+        mk("Tanto", 28, 68, false, 420, 40, 0, "A nimble dagger. 28 dmg.", 0),
+        mk("Katar", 30, 70, false, 450, 55, 0, "Punching blade. 30 dmg.", 0),
+        mk("Sai", 34, 75, false, 480, 60, 0, "Deflecting trident-dagger. 34 dmg.", 0),
+        mk("Kukri", 40, 75, false, 550, 90, 0, "Curved and deadly. 40 dmg.", 0),
+        mk("Machete", 44, 80, false, 580, 100, 0, "Chopping workhorse. 44 dmg.", 0),
+        mk("Kris", 45, 85, false, 620, 105, 0, "Wavy flame blade. 45 dmg.", 0),
+        mk("Jian", 47, 90, false, 640, 110, 0, "The sword of scholars. 47 dmg.", 0),
+        mk("Dao", 49, 85, false, 660, 115, 0, "A broad curved blade. 49 dmg.", 0),
+        mk("Katana", 50, 90, false, 650, 120, 0, "Samurai steel. 50 dmg.", 0),
+        mk("Cutlass", 52, 90, false, 700, 140, 0, "Pirate's choice. 52 dmg.", 0),
+        mk("Chokuto", 55, 92, false, 700, 135, 0, "Straight single-edge. 55 dmg.", 0),
+        mk("Wakisashi", 43, 80, false, 560, 95, 0, "Short companion blade. 43 dmg.", 0),
+        mk("Rapier", 42, 100, false, 600, 110, 0, "Precise thrusts. 42 dmg.", 0),
+        mk("Scimitar", 48, 90, false, 620, 115, 0, "Swift curve. 48 dmg.", 0),
+        mk("Saber", 60, 95, false, 780, 170, 0, "Cavalry blade. 60 dmg.", 0),
+        mk("Cleaver", 58, 85, false, 750, 150, 0, "Butcher's favorite. 58 dmg.", 0),
+        mk("Falchion", 72, 95, false, 900, 185, 0, "Single-edged brute. 72 dmg.", 0),
+        mk("Bastard Sword", 68, 100, false, 850, 175, 0, "Hand-and-a-half sword. 68 dmg.", 0),
+        mk("Estoc", 66, 115, false, 820, 180, 0, "Armor-piercing point. 66 dmg.", 0),
+        mk("Claymore", 90, 110, false, 1150, 250, 0, "Scottish greatsword. 90 dmg.", 0),
+        mk("Zweihander", 110, 120, false, 1400, 330, 0, "Two-handed monster. 110 dmg.", 0),
+        mk("Tonfa", 36, 80, false, 500, 70, 0, "Fast blunt sticks. 36 dmg.", 0),
+        mk("Nunchaku", 33, 85, false, 450, 65, 0, "Whirlwind of strikes. 33 dmg.", 0),
+        mk("Assassin's Blade", 46, 72, false, 380, 108, 0, "Silent and cruel. 46 dmg.", 0),
+        // ----- axes & hammers -----
+        mk("Hatchet", 38, 75, false, 480, 55, 0, "Small but sturdy. 38 dmg.", 0),
+        mk("Battle Axe", 70, 95, false, 900, 180, 0, "Classic war axe. 70 dmg.", 0),
+        mk("War Axe", 78, 95, false, 950, 200, 0, "Cleaves armor. 78 dmg.", 0),
+        mk("Double Axe", 85, 90, false, 1000, 220, 0, "Two blades, no mercy. 85 dmg.", 0),
+        mk("Greataxe", 95, 100, false, 1100, 260, 0, "A wall of iron. 95 dmg.", 0),
+        mk("Doom Axe", 135, 100, false, 1400, 350, 0, "Whispers of ruin. 135 dmg.", 0),
+        mk("War Hammer", 105, 100, false, 1250, 280, 0, "Crushes shields. 105 dmg.", 0),
+        mk("Sledgehammer", 115, 105, false, 1350, 310, 0, "Demolition tool. 115 dmg.", 0),
+        mk("Maul", 120, 100, false, 1400, 330, 0, "Overwhelming weight. 120 dmg.", 0),
+        mk("Great Hammer", 130, 110, false, 1500, 360, 0, "The ground shakes. 130 dmg.", 0),
+        mk("Morning Star", 88, 90, false, 1000, 230, 0, "Spiked ball of pain. 88 dmg.", 0),
+        mk("Flail", 92, 95, false, 1050, 240, 0, "Unpredictable swing. 92 dmg.", 0),
+        // ----- polearms -----
+        mk("Glaive", 55, 140, false, 700, 140, 0, "Sweeping reach. 55 dmg.", 0),
+        mk("Halberd", 62, 150, false, 800, 160, 0, "Axe on a pole. 62 dmg.", 0),
+        mk("Trident", 58, 145, false, 750, 150, 0, "Neptune's fork. 58 dmg.", 0),
+        mk("Pike", 52, 170, false, 780, 145, 0, "Poke from afar. 52 dmg.", 0),
+        mk("Naginata", 60, 155, false, 820, 165, 0, "Curved polearm. 60 dmg.", 0),
+        mk("Blessed Spear", 90, 150, false, 950, 230, 0, "A holy point. 90 dmg.", 0),
+        mk("Kusarigama", 55, 160, false, 800, 170, 0, "Sickle and chain. 55 dmg.", 0),
+        mk("Whip", 40, 180, false, 550, 130, 0, "Crack! 40 dmg.", 0),
+        mk("War Scythe", 84, 160, false, 1050, 225, 0, "Reaps a grim harvest. 84 dmg.", 0),
+        // ----- thrown -----
+        mk("Dart", 22, 300, true, 300, 16, 45, "Pinprick from afar. 22 dmg.", 0),
+        mk("Kunai", 35, 300, true, 400, 12, 80, "Ninja's friend. 35 dmg.", 0),
+        mk("Shuriken", 30, 280, true, 350, 14, 75, "Spinning stars. 30 dmg.", 0),
+        mk("Sling", 34, 340, true, 400, 13, 70, "Old reliable. 34 dmg.", 0),
+        mk("Throwing Axe", 55, 380, true, 750, 11, 140, "Hurl and split. 55 dmg.", 0),
+        mk("Throwing Knives", 34, 320, true, 320, 15, 85, "A fistful of steel. 34 dmg.", 0),
+        mk("Chakram", 42, 350, true, 550, 15, 110, "Rings of death. 42 dmg.", 0),
+        mk("Boomerang", 38, 500, true, 900, 16, 125, "It comes back... mostly. 38 dmg.", 0),
+        mk("Javelin", 50, 420, true, 700, 13, 130, "Olympic armor shot. 50 dmg.", 0),
+        mk("Pilum", 46, 400, true, 650, 12, 120, "Roman javelin. 46 dmg.", 0),
+        mk("Atlatl", 60, 560, true, 900, 13, 185, "Spear launcher. 60 dmg.", 0),
+        mk("Spear Thrower", 64, 580, true, 950, 13, 195, "Extra hurl. 64 dmg.", 0),
+        // ----- bows -----
+        mk("Shortbow", 40, 500, true, 600, 12, 110, "Starter archer bow. 40 dmg.", 0),
+        mk("Recurve Bow", 48, 620, true, 700, 12, 150, "Curved for power. 48 dmg.", 0),
+        mk("Longbow", 52, 650, true, 800, 13, 160, "English classic. 52 dmg.", 0),
+        mk("Compound Bow", 66, 680, true, 900, 13, 200, "Modern mechanics. 66 dmg.", 0),
+        mk("Warbow", 74, 700, true, 950, 13, 230, "Battle-ready draw. 74 dmg.", 0),
+        mk("Greatbow", 88, 750, true, 1100, 12, 280, "Tower of arrows. 88 dmg.", 0),
+        mk("Sniper Bow", 120, 900, true, 1500, 16, 400, "Aim far, hit hard. 120 dmg.", 0),
+        mk("Phoenix Bow", 130, 720, true, 1400, 14, 420, "Feathers ablaze. 130 dmg.", 0),
+        mk("Infinity Bow", 260, 1000, true, 2000, 17, 750, "Endless arrows. 260 dmg.", 0),
+        // ----- crossbows -----
+        mk("Pistol Crossbow", 55, 400, true, 600, 14, 160, "One-handed bolt. 55 dmg.", 1),
+        mk("Hand Crossbow", 60, 450, true, 700, 14, 180, "Reliable sidearm. 60 dmg.", 1),
+        mk("Repeating Crossbow", 72, 480, true, 650, 14, 220, "Chu-ko-nu fury. 72 dmg.", 1),
+        mk("Heavy Crossbow", 95, 550, true, 1100, 14, 290, "Crank that bolt. 95 dmg.", 1),
+        mk("Arbalest", 110, 600, true, 1300, 15, 340, "Siege-grade bolt. 110 dmg.", 1),
+        mk("Ballista Bow", 130, 650, true, 1500, 15, 390, "Almost artillery. 130 dmg.", 1),
+        mk("Eclipse Crossbow", 150, 700, true, 1500, 15, 470, "Darkened bolts. 150 dmg.", 1),
+        // ----- magic -----
+        mk("Wand", 55, 480, true, 700, 13, 170, "Beginner's magic. 55 dmg.", 2),
+        mk("Staff", 65, 520, true, 850, 12, 190, "Reliable focus. 65 dmg.", 2),
+        mk("Fire Wand", 75, 500, true, 900, 12, 210, "Burns bright. 75 dmg.", 2),
+        mk("Frost Wand", 80, 520, true, 950, 11, 225, "Chills the air. 80 dmg.", 2),
+        mk("Crystal Wand", 90, 540, true, 980, 12, 240, "Refracts pure light. 90 dmg.", 2),
+        mk("Lightning Rod", 95, 540, true, 1000, 13, 260, "Crackling power. 95 dmg.", 2),
+        mk("Flame Staff", 110, 560, true, 1150, 11, 300, "A blaze of glory. 110 dmg.", 2),
+        mk("Ice Staff", 120, 580, true, 1200, 10, 330, "Frozen verdict. 120 dmg.", 2),
+        mk("Shadow Wand", 130, 620, true, 1350, 11, 360, "Dark whispers. 130 dmg.", 2),
+        mk("Storm Staff", 140, 600, true, 1300, 12, 380, "Tempest in hand. 140 dmg.", 2),
+        mk("Archmage Staff", 165, 640, true, 1400, 12, 490, "Mastery incarnate. 165 dmg.", 2),
+        // ----- legendary -----
+        mk("Holy Mace", 100, 90, false, 1000, 250, 0, "Blessed bashing. 100 dmg.", 0),
+        mk("Frostfang", 145, 105, false, 1450, 400, 0, "Icy edge. 145 dmg.", 0),
+        mk("Emberbrand", 140, 108, false, 1420, 390, 0, "Burning brand. 140 dmg.", 0),
+        mk("Thunderbringer", 150, 110, false, 1500, 430, 0, "Storms in steel. 150 dmg.", 0),
+        mk("Chaos Blade", 125, 105, false, 1300, 340, 0, "Unstable fury. 125 dmg.", 0),
+        mk("Dragon Tooth", 160, 110, false, 1600, 450, 0, "A dragon's fang. 160 dmg.", 0),
+        mk("Soulrender", 170, 115, false, 1650, 480, 0, "Tears the soul. 170 dmg.", 0),
+        mk("Void Edge", 190, 120, false, 1750, 520, 0, "Reality's cut. 190 dmg.", 0),
+        mk("Titan's Maul", 210, 115, false, 2100, 580, 0, "Shatters the earth. 210 dmg.", 0),
+        mk("Dragon Slayer", 200, 120, false, 1800, 550, 0, "The slayer of legends. 200 dmg.", 0),
+        mk("Celestial Blade", 220, 135, false, 1900, 600, 0, "Star-forged. 220 dmg.", 0),
+        mk("Excalibur", 250, 130, false, 2000, 700, 0, "The king's blade. 250 dmg.", 0),
+        mk("Godslayer", 300, 150, false, 2200, 800, 0, "Even gods fear it. 300 dmg.", 0),
+    };
 
     static Weapon weaponByName(String name, int bonus) {
         for (Weapon w : ALL_WEAPONS) {
             if (w.name.equalsIgnoreCase(name)) {
-                Weapon nw = weaponOf(w.getClass());
+                Weapon nw = w.copy();
                 nw.bonus = bonus;
                 return nw;
             }
@@ -1570,9 +1687,10 @@ public class P {
     }
 
     static Color projectileColor() {
-        if (currentWeapon instanceof Bow) return new Color(150, 100, 60);
-        if (currentWeapon instanceof Crossbow) return new Color(90, 70, 55);
-        return new Color(120, 80, 220);
+        if (currentWeapon == null) return new Color(120, 80, 220);
+        if (currentWeapon.style == 1) return new Color(90, 70, 55);
+        if (currentWeapon.style == 2) return new Color(120, 80, 220);
+        return new Color(150, 100, 60);
     }
 
     static void attackAt(int mx, int my) {
@@ -1925,12 +2043,12 @@ public class P {
         int level = c.level;
         int ri = 1 + (int) (Math.random() * (ALL_WEAPONS.length - 1));
         Weapon base = ALL_WEAPONS[ri];
-        Weapon w = weaponOf(base.getClass());
+        Weapon w = base.copy();
         w.bonus = (level - 1) * 12;
         boolean replaced = false;
         for (int i = 0; i < ownedWeapons.size(); i++) {
             Weapon ow = ownedWeapons.get(i);
-            if (ow.getClass().equals(w.getClass())) {
+            if (ow.name.equalsIgnoreCase(w.name)) {
                 if (ow.bonus < w.bonus) ownedWeapons.set(i, w);
                 replaced = true;
                 break;
@@ -2089,7 +2207,7 @@ public class P {
         int wy = 150;
         for (int i = 0; i < ownedWeapons.size(); i++) {
             Weapon w = ownedWeapons.get(i);
-            boolean eq = currentWeapon != null && currentWeapon.getClass().equals(w.getClass());
+            boolean eq = currentWeapon != null && currentWeapon.name.equals(w.name);
             g2d.setColor(eq ? new Color(0, 120, 220) : Color.BLACK);
             g2d.drawString((i + 1) + ": " + w.name + (eq ? "  <--" : ""), 20, wy);
             wy += 18;
@@ -2155,7 +2273,7 @@ public class P {
             int idx = weaponShopList.getSelectedIndex();
             if (idx < 0) return;
             Weapon w = ALL_WEAPONS[idx];
-            boolean owned = ownedWeapons.stream().anyMatch(ow -> ow.getClass().equals(w.getClass()));
+            boolean owned = ownedWeapons.stream().anyMatch(ow -> ow.name.equalsIgnoreCase(w.name));
             if (owned) {
                 JOptionPane.showMessageDialog(frame, "You already own the " + w.name + "!");
                 return;
@@ -2165,7 +2283,7 @@ public class P {
                 return;
             }
             playerPoints -= w.price;
-            Weapon ownedW = weaponOf(w.getClass());
+            Weapon ownedW = w.copy();
             ownedWeapons.add(ownedW);
             equippedWeapon = ownedW;
             currentWeapon = ownedW;
@@ -2180,12 +2298,12 @@ public class P {
             int idx = weaponShopList.getSelectedIndex();
             if (idx < 0) return;
             Weapon w = ALL_WEAPONS[idx];
-            boolean owned = ownedWeapons.stream().anyMatch(ow -> ow.getClass().equals(w.getClass()));
+            boolean owned = ownedWeapons.stream().anyMatch(ow -> ow.name.equalsIgnoreCase(w.name));
             if (!owned) {
                 JOptionPane.showMessageDialog(frame, "Buy the " + w.name + " first!");
                 return;
             }
-            equippedWeapon = weaponOf(w.getClass());
+            equippedWeapon = w.copy();
             currentWeapon = equippedWeapon;
             saveData();
             updateWeaponShopInfo();
@@ -2210,7 +2328,7 @@ public class P {
             return;
         }
         Weapon w = ALL_WEAPONS[idx];
-        boolean owned = ownedWeapons.stream().anyMatch(ow -> ow.getClass().equals(w.getClass()));
+        boolean owned = ownedWeapons.stream().anyMatch(ow -> ow.name.equalsIgnoreCase(w.name));
         StringBuilder sb = new StringBuilder();
         sb.append(w.name).append("  |  ").append(w.ranged ? "Long-Ranged" : "Melee").append("\n");
         sb.append("Damage: ").append(w.damageValue()).append("\n");
@@ -2219,7 +2337,7 @@ public class P {
         sb.append("Price: ").append(w.price).append(" points\n\n");
         sb.append(w.desc).append("\n");
         if (owned) {
-            sb.append(equippedWeapon != null && equippedWeapon.getClass().equals(w.getClass()) ? "[OWNED] [EQUIPPED]" : "[OWNED]");
+            sb.append(equippedWeapon != null && equippedWeapon.name.equalsIgnoreCase(w.name) ? "[OWNED] [EQUIPPED]" : "[OWNED]");
         } else {
             sb.append("[NOT OWNED]");
         }
@@ -2269,20 +2387,20 @@ public class P {
                     String nm = wp[0].trim();
                     int bonus = wp.length > 1 ? Integer.parseInt(wp[1].trim()) : 0;
                     Weapon w = weaponByName(nm, bonus);
-                    if (w != null && !ownedWeapons.stream().anyMatch(ow -> ow.getClass().equals(w.getClass()))) {
+                    if (w != null && !ownedWeapons.stream().anyMatch(ow -> ow.name.equalsIgnoreCase(w.name))) {
                         ownedWeapons.add(w);
                     }
                 }
             }
             br.close();
-            if (ownedWeapons.isEmpty()) ownedWeapons.add(new Sword());
+            if (ownedWeapons.isEmpty()) ownedWeapons.add(defaultWeapon());
             String[] ep = (first == null ? "Sword|0" : first).split("\\|");
             int ebonus = ep.length > 1 ? Integer.parseInt(ep[1].trim()) : 0;
             Weapon eq = weaponByName(ep[0].trim(), ebonus);
             equippedWeapon = eq != null ? eq : ownedWeapons.get(0);
             currentWeapon = equippedWeapon;
         } catch (Exception ignored) {
-            if (ownedWeapons.isEmpty()) ownedWeapons.add(new Sword());
+            if (ownedWeapons.isEmpty()) ownedWeapons.add(defaultWeapon());
             equippedWeapon = ownedWeapons.get(0);
             currentWeapon = equippedWeapon;
         }
