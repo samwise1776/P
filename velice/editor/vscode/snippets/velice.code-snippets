@@ -1,0 +1,102 @@
+{
+  "Hello World": {
+    "prefix": "hello",
+    "body": "print(\"Hello, ${1:World}!\")",
+    "description": "Print to standard output"
+  },
+  "let binding": {
+    "prefix": "let",
+    "body": "let ${1:name} = ${2:value}",
+    "description": "Immutable variable binding"
+  },
+  "let mut binding": {
+    "prefix": "letmut",
+    "body": "let mut ${1:name} = ${2:value}",
+    "description": "Mutable variable binding"
+  },
+  "const": {
+    "prefix": "const",
+    "body": "const ${1:NAME} = ${2:value}",
+    "description": "Compile-time constant"
+  },
+  "function": {
+    "prefix": "fn",
+    "body": "fn ${1:name}(${2:params}) {\n\t${3}\n}",
+    "description": "Function definition"
+  },
+  "if expression": {
+    "prefix": "if",
+    "body": "if ${1:condition} {\n\t${2}\n} else {\n\t${3}\n}",
+    "description": "Conditional"
+  },
+  "for loop": {
+    "prefix": "for",
+    "body": "for ${1:item} in ${2:iterable} {\n\t${3}\n}",
+    "description": "Iterate over a collection"
+  },
+  "for range": {
+    "prefix": "forrange",
+    "body": "for ${1:i} in ${2:0}..${3:10} {\n\t${4}\n}",
+    "description": "Iterate over a numeric range"
+  },
+  "while loop": {
+    "prefix": "while",
+    "body": "while ${1:condition} {\n\t${2}\n}",
+    "description": "Conditional loop"
+  },
+  "match": {
+    "prefix": "match",
+    "body": "match ${1:expr} {\n\t${2:pattern} => ${3:value},\n\t_ => ${4:default},\n}",
+    "description": "Pattern matching"
+  },
+  "class": {
+    "prefix": "class",
+    "body": "class ${1:Name} {\n\tfn init(${2}) {\n\t\t${3}\n\t}\n}",
+    "description": "Class definition"
+  },
+  "class extends": {
+    "prefix": "classext",
+    "body": "class ${1:Name} extends ${2:Base} {\n\tfn init(${3}) {\n\t\t${4}\n\t}\n}",
+    "description": "Class with inheritance"
+  },
+  "struct": {
+    "prefix": "struct",
+    "body": "struct ${1:Name} {\n\t${2:field}: ${3:type},\n}",
+    "description": "Data structure definition"
+  },
+  "trait": {
+    "prefix": "trait",
+    "body": "trait ${1:Name} {\n\tfn ${2:method}()\n}",
+    "description": "Interface/trait definition"
+  },
+  "try/catch": {
+    "prefix": "try",
+    "body": "try {\n\t${1}\n} catch ${2:e} {\n\t${3}\n} finally {\n\t${4}\n}",
+    "description": "Error handling"
+  },
+  "throw": {
+    "prefix": "throw",
+    "body": "throw \"${1:error message}\"",
+    "description": "Raise an error"
+  },
+  "pipe": {
+    "prefix": "pipe",
+    "body": "${1:value} |> ${2:fn}",
+    "description": "Pipe operator"
+  },
+  "array literal": {
+    "prefix": "arr",
+    "body": "[${1:item1}, ${2:item2}]",
+    "description": "Array literal"
+  },
+  "map literal": {
+    "prefix": "map",
+    "body": "{\"${1:key}\": ${2:value}}",
+    "description": "Map literal"
+  },
+  "import": {
+    "prefix": "import",
+    "body": "import \"${1:module}.velice\"",
+    "description": "Import a module"
+  }
+}
