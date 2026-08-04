@@ -42,7 +42,11 @@ public class P {
 
     // ---- single player combat ----
     static final int PLAYER_MAX_HEALTH = 5000;
+    static int playerMaxHealth = PLAYER_MAX_HEALTH;
     static int playerHealth = PLAYER_MAX_HEALTH;
+    static int playerLevel = 1;
+    static int levelKills = 0;
+    static int totalKills = 0;
     static int kills = 0;
     static Weapon equippedWeapon = new Sword();
     static Weapon currentWeapon = equippedWeapon;
@@ -51,12 +55,15 @@ public class P {
     static long swingEffectUntil = 0;
     static ArrayList<Enemy> enemies = new ArrayList<>();
     static ArrayList<Projectile> projectiles = new ArrayList<>();
+    static ArrayList<Chest> chests = new ArrayList<>();
+    static ArrayList<Block> blocks = new ArrayList<>();
     static long lastSpawnMs = 0;
     static boolean bossAlive = false;
     static int bossWaves = 0;
     static long bossMessageUntil = 0;
     static boolean gameOver = false;
     static ArrayList<Weapon> ownedWeapons = new ArrayList<>();
+    static JPanel editorPaint;
 
     // ---- shared constants ----
     static final int HELP_DISCOUNT = 10000;
@@ -117,6 +124,7 @@ public class P {
         buildMultiplayer(frame);
         buildNetPanel(frame);
         buildLeaderboard(frame);
+        buildEditor(frame);
 
         frame.add(rootCards);
         frame.setVisible(true);
@@ -167,6 +175,14 @@ public class P {
         JButton weaponShopBtn = new JButton("Weapon Shop");
         weaponShopBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
         weaponShopBtn.addActionListener(e -> openWeaponShop(frame));
+
+        JButton makeLevelBtn = new JButton("Make Level");
+        makeLevelBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
+        makeLevelBtn.addActionListener(e -> {
+            loadLevel();
+            if (editorPaint != null) editorPaint.repaint();
+            layoutCards.show(rootCards, "editor");
+        });
 
         JButton mpBtn = new JButton("Start Multiplayer");
         mpBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -240,6 +256,8 @@ public class P {
         center.add(Box.createVerticalStrut(8));
         center.add(weaponShopBtn);
         center.add(Box.createVerticalStrut(8));
+        center.add(makeLevelBtn);
+        center.add(Box.createVerticalStrut(8));
         center.add(mpBtn);
         center.add(Box.createVerticalStrut(8));
         center.add(pubBtn);
@@ -265,6 +283,8 @@ public class P {
                 int w = getWidth();
                 drawBackground(g2d, w, h);
 
+                for (Block b : blocks) drawBlock(g2d, b);
+
                 // Boost area boxes with cost
                 int groundTop = h - 100;
                 for (int i = 0; i < areaX.length; i++) {
@@ -281,6 +301,8 @@ public class P {
                         g2d.drawString("$" + AREA_COST, areaX[i] + 22, groundTop - 30);
                     }
                 }
+
+                for (Chest c : chests) c.draw(g2d);
 
                 for (Enemy e : enemies) {
                     if (!e.dead) e.draw(g2d);
@@ -313,6 +335,13 @@ public class P {
         paint.addMouseListener(new MouseAdapter() {
             @Override
             public void mousePressed(MouseEvent e) {
+                if (gameOver) return;
+                for (Chest c : chests) {
+                    if (c.contains(e.getX(), e.getY())) {
+                        openChest(c);
+                        return;
+                    }
+                }
                 attackAt(e.getX(), e.getY());
             }
         });
@@ -498,10 +527,31 @@ public class P {
             }
             velY += 0.8;
             circleY += (int) velY;
+            boolean onBlock = false;
+            if (velY >= 0) {
+                for (Block b : blocks) {
+                    if (horizOverlap(b) && circleY + 85 >= b.y && circleY + 85 <= b.y + (int) velY + 2) {
+                        circleY = b.y - 85;
+                        velY = 0;
+                        onBlock = true;
+                        break;
+                    }
+                }
+            } else {
+                for (Block b : blocks) {
+                    if (horizOverlap(b) && circleY <= b.y + b.h && circleY >= b.y + b.h + (int) velY - 2) {
+                        circleY = b.y + b.h;
+                        velY = 0;
+                        break;
+                    }
+                }
+            }
             int gY = paint.getHeight() - 185;
             if (circleY >= gY) {
                 circleY = gY;
                 velY = 0;
+                onGround = true;
+            } else if (onBlock) {
                 onGround = true;
             }
             circleX = clamp(circleX, 0, paint.getWidth() - 50);
@@ -551,7 +601,11 @@ public class P {
         onGround = false;
         jumpsLeft = 50;
         areaBought = new boolean[areaX.length];
-        playerHealth = PLAYER_MAX_HEALTH;
+        playerLevel = 1;
+        levelKills = 0;
+        totalKills = 0;
+        playerMaxHealth = PLAYER_MAX_HEALTH;
+        playerHealth = playerMaxHealth;
         kills = 0;
         currentWeapon = equippedWeapon;
         facing = 1;
@@ -559,6 +613,7 @@ public class P {
         swingEffectUntil = 0;
         enemies.clear();
         projectiles.clear();
+        chests.clear();
         lastSpawnMs = 0;
         bossAlive = false;
         bossWaves = 0;
@@ -571,6 +626,18 @@ public class P {
 
         circleX = clamp(circleX + dx, 0, panel.getWidth() - 50);
         if (dx != 0) facing = dx > 0 ? 1 : -1;
+
+        for (Block b : blocks) {
+            if (!vertOverlap(b)) continue;
+            if (dx > 0 && circleX + 45 > b.x && circleX + 45 < b.x + b.w + Math.abs(dx) + 2) {
+                circleX = b.x - 45;
+                break;
+            }
+            if (dx < 0 && circleX < b.x + b.w && circleX > b.x - Math.abs(dx) - 2) {
+                circleX = b.x + b.w;
+                break;
+            }
+        }
 
         if (!isVip()) steps--;
 
@@ -1405,6 +1472,7 @@ public class P {
         int price;
         int projSpeed;
         String desc;
+        int bonus = 0;
 
         Weapon(String name, int damage, int range, boolean ranged, long cooldownMs, int price, int projSpeed, String desc) {
             this.name = name;
@@ -1415,6 +1483,10 @@ public class P {
             this.price = price;
             this.projSpeed = projSpeed;
             this.desc = desc;
+        }
+
+        int damageValue() {
+            return damage + bonus;
         }
     }
 
@@ -1438,11 +1510,27 @@ public class P {
         return new Sword();
     }
 
-    static Weapon weaponByName(String name) {
+    static Weapon weaponByName(String name, int bonus) {
         for (Weapon w : ALL_WEAPONS) {
-            if (w.name.equalsIgnoreCase(name)) return weaponOf(w.getClass());
+            if (w.name.equalsIgnoreCase(name)) {
+                Weapon nw = weaponOf(w.getClass());
+                nw.bonus = bonus;
+                return nw;
+            }
         }
         return null;
+    }
+
+    static int requiredKills(int level) {
+        return (int) Math.ceil(5 * Math.pow(1.5, level - 1));
+    }
+
+    static double attackMultiplier() {
+        return 1.0 + 0.15 * (playerLevel - 1);
+    }
+
+    static int attackDamage() {
+        return currentWeapon == null ? 0 : (int) Math.round(currentWeapon.damageValue() * attackMultiplier());
     }
 
     static void damagePlayer(int dmg) {
@@ -1465,7 +1553,7 @@ public class P {
         if (currentWeapon.ranged) {
             int sx = circleX + 22 + facing * 24;
             int sy = circleY + 32;
-            projectiles.add(new Projectile(sx, sy, facing * currentWeapon.projSpeed, 0, currentWeapon.damage, false, projectileColor()));
+            projectiles.add(new Projectile(sx, sy, facing * currentWeapon.projSpeed, 0, attackDamage(), false, projectileColor()));
         } else {
             swingEffectUntil = now + 120;
             int reach = currentWeapon.range;
@@ -1476,7 +1564,7 @@ public class P {
                 int ddx = cx - pcx, ddy = cy - pcy;
                 if (facing > 0 && ddx < -24) continue;
                 if (facing < 0 && ddx > 24) continue;
-                if (ddx * ddx + ddy * ddy < reach * reach) e.hurt(currentWeapon.damage);
+                if (ddx * ddx + ddy * ddy < reach * reach) e.hurt(attackDamage());
             }
         }
     }
@@ -1499,7 +1587,7 @@ public class P {
             double sp = currentWeapon.projSpeed;
             double vx = len > 0 ? nx / len * sp : facing * sp;
             double vy = len > 0 ? ny / len * sp : 0;
-            projectiles.add(new Projectile(circleX + 22 + facing * 24, circleY + 32, vx, vy, currentWeapon.damage, false, projectileColor()));
+            projectiles.add(new Projectile(circleX + 22 + facing * 24, circleY + 32, vx, vy, attackDamage(), false, projectileColor()));
         } else {
             swingEffectUntil = now + 120;
             int reach = currentWeapon.range;
@@ -1510,7 +1598,7 @@ public class P {
                 int ddx = cx - pcx, ddy = cy - pcy;
                 if (facing > 0 && ddx < -24) continue;
                 if (facing < 0 && ddx > 24) continue;
-                if (ddx * ddx + ddy * ddy < reach * reach) e.hurt(currentWeapon.damage);
+                if (ddx * ddx + ddy * ddy < reach * reach) e.hurt(attackDamage());
             }
         }
     }
@@ -1595,6 +1683,22 @@ public class P {
                 setPoints(playerName, playerPoints);
                 saveData();
                 startPointsLabel.setText("Points: " + playerPoints);
+            }
+            totalKills++;
+            levelKills++;
+            if (levelKills >= requiredKills(playerLevel)) {
+                playerLevel++;
+                levelKills = 0;
+                playerMaxHealth = (int) (PLAYER_MAX_HEALTH * Math.pow(1.75, playerLevel - 1));
+                playerHealth = playerMaxHealth;
+                JOptionPane.showMessageDialog(paint, "LEVEL UP! Level " + playerLevel
+                        + "\nMax HP " + playerMaxHealth + "\nAttack x" + String.format("%.2f", attackMultiplier()));
+            }
+            if (totalKills % 5 == 0 && chests.size() < 3) {
+                int chestLevel = totalKills / 5;
+                int cx = 60 + (int) (Math.random() * Math.max(1, paint.getWidth() - 160));
+                int cy = paint.getHeight() - 185 - 30;
+                chests.add(new Chest(cx, cy, chestLevel));
             }
         }
 
@@ -1784,6 +1888,180 @@ public class P {
         }
     }
 
+    // ================= CHESTS =================
+    static class Chest {
+        int x, y, w, h, level;
+
+        Chest(int x, int y, int level) {
+            this.x = x;
+            this.y = y;
+            this.w = 44;
+            this.h = 30;
+            this.level = level;
+        }
+
+        boolean contains(int mx, int my) {
+            return mx >= x && mx <= x + w && my >= y && my <= y + h;
+        }
+
+        void draw(Graphics2D g2d) {
+            g2d.setFont(new Font("Arial", Font.BOLD, 11));
+            g2d.setColor(new Color(255, 255, 255));
+            g2d.drawString("Lv " + level, x, y - 6);
+            g2d.setColor(new Color(200, 140, 70));
+            g2d.fillRect(x, y, w, 12);
+            g2d.setColor(new Color(150, 100, 50));
+            g2d.fillRect(x, y + 12, w, h - 12);
+            g2d.setColor(new Color(255, 215, 0));
+            g2d.fillRect(x + w / 2 - 4, y + 10, 8, 10);
+            g2d.setColor(Color.BLACK);
+            g2d.drawRect(x, y, w, h);
+        }
+    }
+
+    static void openChest(Chest c) {
+        chests.remove(c);
+        int level = c.level;
+        int ri = 1 + (int) (Math.random() * (ALL_WEAPONS.length - 1));
+        Weapon base = ALL_WEAPONS[ri];
+        Weapon w = weaponOf(base.getClass());
+        w.bonus = (level - 1) * 12;
+        boolean replaced = false;
+        for (int i = 0; i < ownedWeapons.size(); i++) {
+            Weapon ow = ownedWeapons.get(i);
+            if (ow.getClass().equals(w.getClass())) {
+                if (ow.bonus < w.bonus) ownedWeapons.set(i, w);
+                replaced = true;
+                break;
+            }
+        }
+        if (!replaced) ownedWeapons.add(w);
+        currentWeapon = w;
+        equippedWeapon = w;
+        lastAttackMs = 0;
+        saveData();
+        JOptionPane.showMessageDialog(paint, "Chest (Lv " + level + ") opened!\nGot " + w.name + " (+" + w.bonus + " bonus dmg, total " + w.damageValue() + ")!");
+        paint.repaint();
+    }
+
+    // ================= LEVEL BLOCKS =================
+    static class Block {
+        int x, y, w, h;
+
+        Block(int x, int y, int w, int h) {
+            this.x = x;
+            this.y = y;
+            this.w = w;
+            this.h = h;
+        }
+
+        boolean at(int gx, int gy) {
+            return x == gx && y == gy;
+        }
+    }
+
+    static void drawBlock(Graphics2D g2d, Block b) {
+        g2d.setColor(new Color(139, 90, 43));
+        g2d.fillRect(b.x, b.y, b.w, b.h);
+        g2d.setColor(new Color(90, 160, 60));
+        g2d.fillRect(b.x, b.y, b.w, 8);
+        g2d.setColor(Color.BLACK);
+        g2d.drawRect(b.x, b.y, b.w, b.h);
+    }
+
+    static boolean horizOverlap(Block b) {
+        return circleX + 45 > b.x && circleX < b.x + b.w;
+    }
+
+    static boolean vertOverlap(Block b) {
+        return circleY + 85 > b.y && circleY < b.y + b.h;
+    }
+
+    // ================= LEVEL EDITOR =================
+    static void buildEditor(JFrame frame) {
+        editorPaint = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                Graphics2D g2d = (Graphics2D) g;
+                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                drawBackground(g2d, getWidth(), getHeight());
+                g2d.setColor(new Color(0, 0, 0, 50));
+                for (int x = 0; x <= getWidth(); x += 40) g2d.drawLine(x, 0, x, getHeight());
+                for (int y = 0; y <= getHeight(); y += 40) g2d.drawLine(0, y, getWidth(), y);
+                for (Block b : blocks) drawBlock(g2d, b);
+            }
+        };
+        editorPaint.setPreferredSize(new Dimension(800, 560));
+        editorPaint.setBackground(Color.WHITE);
+        editorPaint.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                int gx = e.getX() / 40 * 40, gy = e.getY() / 40 * 40;
+                boolean found = false;
+                for (java.util.Iterator<Block> it = blocks.iterator(); it.hasNext(); ) {
+                    Block b = it.next();
+                    if (b.at(gx, gy)) {
+                        it.remove();
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) blocks.add(new Block(gx, gy, 40, 40));
+                editorPaint.repaint();
+            }
+        });
+
+        JButton clearBtn = new JButton("Clear All");
+        clearBtn.addActionListener(e -> {
+            blocks.clear();
+            editorPaint.repaint();
+        });
+        JButton saveBtn = new JButton("Save Level");
+        saveBtn.addActionListener(e -> {
+            saveLevel();
+            JOptionPane.showMessageDialog(frame, "Level saved!");
+        });
+        JButton backBtn = new JButton("Back");
+        backBtn.addActionListener(e -> layoutCards.show(rootCards, "start"));
+
+        JPanel bar = new JPanel(new FlowLayout());
+        bar.add(new JLabel("Click to place/remove blocks (40px grid)"));
+        bar.add(clearBtn);
+        bar.add(saveBtn);
+        bar.add(backBtn);
+        JPanel p = new JPanel(new BorderLayout());
+        p.add(editorPaint, BorderLayout.CENTER);
+        p.add(bar, BorderLayout.SOUTH);
+        rootCards.add(p, "editor");
+    }
+
+    static void saveLevel() {
+        try {
+            PrintWriter w = new PrintWriter(new FileWriter("friendrun_level.txt"));
+            for (Block b : blocks) w.println(b.x + "|" + b.y);
+            w.close();
+        } catch (Exception ignored) {
+        }
+    }
+
+    static void loadLevel() {
+        blocks.clear();
+        try {
+            BufferedReader br = new BufferedReader(new FileReader("friendrun_level.txt"));
+            String line;
+            while ((line = br.readLine()) != null) {
+                String[] p = line.split("\\|");
+                if (p.length == 2) {
+                    int bx = Integer.parseInt(p[0].trim()), by = Integer.parseInt(p[1].trim());
+                    blocks.add(new Block(bx, by, 40, 40));
+                }
+            }
+            br.close();
+        } catch (Exception ignored) {
+        }
+    }
+
     // ================= COMBAT HUD =================
     static void drawPlayerHud(Graphics2D g2d) {
         int bw = 190, bh = 16;
@@ -1793,10 +2071,10 @@ public class P {
         g2d.setColor(new Color(120, 20, 20));
         g2d.fillRoundRect(bx, by, bw, bh, 4, 4);
         g2d.setColor(new Color(60, 210, 60));
-        g2d.fillRoundRect(bx, by, (int) (bw * Math.max(0, playerHealth) / (double) PLAYER_MAX_HEALTH), bh, 4, 4);
+        g2d.fillRoundRect(bx, by, (int) (bw * Math.max(0, playerHealth) / (double) playerMaxHealth), bh, 4, 4);
         g2d.setColor(Color.WHITE);
         g2d.setFont(new Font("Arial", Font.BOLD, 11));
-        g2d.drawString("HP " + Math.max(0, playerHealth) + "/" + PLAYER_MAX_HEALTH, bx + 5, by + 13);
+        g2d.drawString("HP " + Math.max(0, playerHealth) + "/" + playerMaxHealth, bx + 5, by + 13);
 
         g2d.setColor(Color.BLACK);
         g2d.setFont(new Font("Arial", Font.BOLD, 15));
@@ -1816,10 +2094,11 @@ public class P {
             wy += 18;
         }
         g2d.setColor(Color.BLACK);
-        g2d.drawString("Kills: " + kills + " | Boss in " + (25 * (bossWaves + 1) - kills) + " | Q/E to switch", 20, wy + 4);
+        g2d.drawString("Level " + playerLevel + " | Next lvl in " + (requiredKills(playerLevel) - levelKills) + " kills | Atk x" + String.format("%.2f", attackMultiplier()), 20, wy + 4);
+        g2d.drawString("Kills: " + kills + " | Boss in " + (25 * (bossWaves + 1) - kills) + " | Chest in " + (5 - totalKills % 5) + " | Q/E to switch", 20, wy + 22);
         if (steps <= 0) {
             g2d.setColor(Color.RED);
-            g2d.drawString("OUT OF STEPS! Buy more below.", 20, wy + 24);
+            g2d.drawString("OUT OF STEPS! Buy more below.", 20, wy + 44);
         }
     }
 
@@ -1894,7 +2173,7 @@ public class P {
             weaponShopPoints.setText("Points: " + playerPoints);
             if (startPointsLabel != null) startPointsLabel.setText("Points: " + playerPoints);
             updateWeaponShopInfo();
-            JOptionPane.showMessageDialog(frame, "Bought " + w.name + "! Damage: " + w.damage);
+            JOptionPane.showMessageDialog(frame, "Bought " + w.name + "! Damage: " + w.damageValue());
         });
         equipBtn.addActionListener(e -> {
             int idx = weaponShopList.getSelectedIndex();
@@ -1933,7 +2212,7 @@ public class P {
         boolean owned = ownedWeapons.stream().anyMatch(ow -> ow.getClass().equals(w.getClass()));
         StringBuilder sb = new StringBuilder();
         sb.append(w.name).append("  |  ").append(w.ranged ? "Long-Ranged" : "Melee").append("\n");
-        sb.append("Damage: ").append(w.damage).append("\n");
+        sb.append("Damage: ").append(w.damageValue()).append("\n");
         sb.append(w.ranged ? "Range: " : "Reach: ").append(w.range).append("px\n");
         sb.append("Cooldown: ").append(w.cooldownMs).append("ms\n");
         sb.append("Price: ").append(w.price).append(" points\n\n");
@@ -1985,7 +2264,10 @@ public class P {
             ownedWeapons.clear();
             while ((line = br.readLine()) != null) {
                 if (!line.trim().isEmpty()) {
-                    Weapon w = weaponByName(line.trim());
+                    String[] wp = line.split("\\|");
+                    String nm = wp[0].trim();
+                    int bonus = wp.length > 1 ? Integer.parseInt(wp[1].trim()) : 0;
+                    Weapon w = weaponByName(nm, bonus);
                     if (w != null && !ownedWeapons.stream().anyMatch(ow -> ow.getClass().equals(w.getClass()))) {
                         ownedWeapons.add(w);
                     }
@@ -1993,7 +2275,9 @@ public class P {
             }
             br.close();
             if (ownedWeapons.isEmpty()) ownedWeapons.add(new Sword());
-            Weapon eq = weaponByName(first == null ? "Sword" : first.trim());
+            String[] ep = (first == null ? "Sword|0" : first).split("\\|");
+            int ebonus = ep.length > 1 ? Integer.parseInt(ep[1].trim()) : 0;
+            Weapon eq = weaponByName(ep[0].trim(), ebonus);
             equippedWeapon = eq != null ? eq : ownedWeapons.get(0);
             currentWeapon = equippedWeapon;
         } catch (Exception ignored) {
@@ -2001,6 +2285,7 @@ public class P {
             equippedWeapon = ownedWeapons.get(0);
             currentWeapon = equippedWeapon;
         }
+        loadLevel();
     }
 
     static void saveData() {
@@ -2029,9 +2314,9 @@ public class P {
         }
         try {
             PrintWriter w = new PrintWriter(new FileWriter("friendrun_weapons.txt"));
-            w.println(equippedWeapon != null ? equippedWeapon.name : "Sword");
+            w.println(equippedWeapon != null ? equippedWeapon.name + "|" + equippedWeapon.bonus : "Sword|0");
             for (Weapon ow : ownedWeapons) {
-                w.println(ow.name);
+                w.println(ow.name + "|" + ow.bonus);
             }
             w.close();
         } catch (Exception ignored) {
