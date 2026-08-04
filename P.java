@@ -310,6 +310,13 @@ public class P {
         };
         paint.setBackground(Color.WHITE);
 
+        paint.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                attackAt(e.getX(), e.getY());
+            }
+        });
+
         JPanel shopPanel = new JPanel(new FlowLayout());
 
         JButton buyStepsBtn = new JButton("Buy 10 Steps ($" + stepCost + ")");
@@ -1431,10 +1438,41 @@ public class P {
         if (currentWeapon.ranged) {
             int sx = circleX + 22 + facing * 24;
             int sy = circleY + 32;
-            Color c = currentWeapon instanceof Bow ? new Color(150, 100, 60)
-                    : currentWeapon instanceof Crossbow ? new Color(90, 70, 55)
-                    : new Color(120, 80, 220);
-            projectiles.add(new Projectile(sx, sy, facing * currentWeapon.projSpeed, 0, currentWeapon.damage, false, c));
+            projectiles.add(new Projectile(sx, sy, facing * currentWeapon.projSpeed, 0, currentWeapon.damage, false, projectileColor()));
+        } else {
+            swingEffectUntil = now + 120;
+            int reach = currentWeapon.range;
+            int pcx = circleX + 22, pcy = circleY + 30;
+            for (Enemy e : enemies) {
+                if (e.dead) continue;
+                int cx = e.x + e.width / 2, cy = e.y - e.height / 2;
+                int ddx = cx - pcx, ddy = cy - pcy;
+                if (facing > 0 && ddx < -24) continue;
+                if (facing < 0 && ddx > 24) continue;
+                if (ddx * ddx + ddy * ddy < reach * reach) e.hurt(currentWeapon.damage);
+            }
+        }
+    }
+
+    static Color projectileColor() {
+        if (currentWeapon instanceof Bow) return new Color(150, 100, 60);
+        if (currentWeapon instanceof Crossbow) return new Color(90, 70, 55);
+        return new Color(120, 80, 220);
+    }
+
+    static void attackAt(int mx, int my) {
+        if (gameOver || currentWeapon == null) return;
+        facing = mx >= circleX + 22 ? 1 : -1;
+        long now = System.currentTimeMillis();
+        if (now - lastAttackMs < currentWeapon.cooldownMs) return;
+        lastAttackMs = now;
+        if (currentWeapon.ranged) {
+            double nx = mx - (circleX + 22), ny = my - (circleY + 30);
+            double len = Math.hypot(nx, ny);
+            double sp = currentWeapon.projSpeed;
+            double vx = len > 0 ? nx / len * sp : facing * sp;
+            double vy = len > 0 ? ny / len * sp : 0;
+            projectiles.add(new Projectile(circleX + 22 + facing * 24, circleY + 32, vx, vy, currentWeapon.damage, false, projectileColor()));
         } else {
             swingEffectUntil = now + 120;
             int reach = currentWeapon.range;
@@ -1508,12 +1546,10 @@ public class P {
             } else {
                 money = (int) Math.min((long) maxMoneyCap, (long) money + 50);
                 kills++;
-                if (kills % 5 == 0) {
-                    playerPoints++;
-                    setPoints(playerName, playerPoints);
-                    saveData();
-                    startPointsLabel.setText("Points: " + playerPoints);
-                }
+                playerPoints++;
+                setPoints(playerName, playerPoints);
+                saveData();
+                startPointsLabel.setText("Points: " + playerPoints);
             }
         }
 
@@ -1801,6 +1837,7 @@ public class P {
             setPoints(playerName, playerPoints);
             saveData();
             weaponShopPoints.setText("Points: " + playerPoints);
+            if (startPointsLabel != null) startPointsLabel.setText("Points: " + playerPoints);
             updateWeaponShopInfo();
             JOptionPane.showMessageDialog(frame, "Bought " + w.name + "! Damage: " + w.damage);
         });
