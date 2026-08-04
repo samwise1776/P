@@ -426,7 +426,7 @@ public class P {
             }
         });
 
-        JButton menuBtn = new JButton("Menu");
+        JButton menuBtn = new JButton("Back to Menu");
         menuBtn.addActionListener(e -> {
             singleTimer.stop();
             layoutCards.show(rootCards, "start");
@@ -693,7 +693,7 @@ public class P {
         };
         multiPaint.setBackground(Color.WHITE);
 
-        JButton endBtn = new JButton("End Match");
+        JButton endBtn = new JButton("Back to Menu");
         endBtn.addActionListener(e -> {
             if (matchOver) return;
             matchOver = true;
@@ -894,7 +894,7 @@ public class P {
         };
         netPaint.setBackground(Color.WHITE);
 
-        JButton leaveBtn = new JButton("Leave Match");
+        JButton leaveBtn = new JButton("Back to Menu");
         leaveBtn.addActionListener(e -> {
             if (!netMatchActive) return;
             netMatchActive = false;
@@ -1686,6 +1686,7 @@ public class P {
             }
             totalKills++;
             levelKills++;
+            playerHealth = Math.min(playerMaxHealth, playerHealth + 100);
             if (levelKills >= requiredKills(playerLevel)) {
                 playerLevel++;
                 levelKills = 0;
