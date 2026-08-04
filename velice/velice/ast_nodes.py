@@ -179,6 +179,7 @@ class ImplDecl(Node):
 @dataclass(frozen=True)
 class ImportStmt(Node):
     path: str; alias: Optional[str] = None; items: list = field(default_factory=list)
+    wildcard: bool = False; module_path: str = ""
 
 @dataclass(frozen=True)
 class TypeAlias(Node):

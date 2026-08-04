@@ -287,10 +287,53 @@ class Parser:
         return A.AssertStmt(t.line, t.col, e, msg)
 
     def _import_stmt(self):
-        t = self._advance(); path = self._expect(TT.STRING).value
+        t = self._advance()
+        # `from "path" import item` form
+        if t.type == TT.FROM:
+            path = self._expect(TT.STRING).value
+            self._expect(TT.IMPORT)
+            items = []
+            if self._at(TT.STAR) or self._match(TT.STAR):
+                return A.ImportStmt(t.line, t.col, path, None, [], True)
+            while True:
+                items.append(self._expect(TT.IDENT).value)
+                if not self._match(TT.COMMA): break
+            return A.ImportStmt(t.line, t.col, path, None, items)
+        # `import name`, `import a.b.c`, `import "file.velice"`, `import a as b`,
+        # `import a.*`, `import a.Item`, `import {Item, Other}`?
+        if t.type == TT.LBRACE:
+            items = []
+            while not self._at(TT.RBRACE):
+                items.append(self._expect(TT.IDENT).value)
+                if not self._match(TT.COMMA): break
+            self._expect(TT.RBRACE)
+            return A.ImportStmt(t.line, t.col, "", None, items)
+        t = self._match(TT.STRING, TT.IDENT)
+        if not t:
+            p = self._peek()
+            raise ParseError(f"Expected import target, got {p.type.name} at line {p.line}", p.line, p.col)
+        first = t.value
         alias = None
-        if self._match(TT.AS): alias = self._expect(TT.IDENT).value
-        return A.ImportStmt(t.line, t.col, path, alias)
+        wildcard = False
+        module_path = first
+        if not first.endswith(".velice"):
+            parts = [first]
+            while self._match(TT.DOT):
+                if self._at(TT.STAR):
+                    self._advance(); wildcard = True; break
+                if self._at(TT.LBRACE):
+                    items = []
+                    self._advance()
+                    while not self._at(TT.RBRACE):
+                        items.append(self._expect(TT.IDENT).value)
+                        if not self._match(TT.COMMA): break
+                    self._expect(TT.RBRACE)
+                    return A.ImportStmt(t.line, t.col, first, None, items)
+                parts.append(self._expect(TT.IDENT).value)
+            module_path = ".".join(parts)
+        if self._match(TT.AS):
+            alias = self._expect(TT.IDENT).value
+        return A.ImportStmt(t.line, t.col, first, alias, [], wildcard, module_path)
 
     def _type_alias(self):
         t = self._advance(); name = self._expect(TT.IDENT).value

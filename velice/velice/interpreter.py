@@ -110,10 +110,23 @@ class VLInstance:
 
     def __repr__(self): return f"<{self.klass.name} instance>"
 
+class _ModuleProxy:
+    """Namespace object exposing a module's globals via dot access."""
+    def __init__(self, namespace):
+        self.__namespace = namespace
+    def get(self, name):
+        if name in self.__namespace:
+            return self.__namespace[name]
+        raise VeliceError(f"module has no member '{name}'")
+    def names(self):
+        return list(self.__namespace.keys())
+    def __repr__(self): return "<module>"
+
 # ── Interpreter ──────────────────────────────────────────────────────────
 class Interpreter:
-    def __init__(self):
+    def __init__(self, module_loader=None):
         self.globals = Env()
+        self.module_loader = module_loader
         self._setup_builtins()
 
     def _setup_builtins(self):
@@ -274,6 +287,7 @@ class Interpreter:
         if isinstance(node, A.ThrowStmt): raise VeliceError(self._to_str(self.eval(node.expr, env)))
         if isinstance(node, A.TryStmt): return self._eval_try(node, env)
         if isinstance(node, A.AssertStmt): return self._eval_assert(node, env)
+        if isinstance(node, A.ImportStmt): return self._eval_import(node, env)
         if isinstance(node, (A.FnDecl, A.LambdaExpr)): return self._eval_fn_decl(node, env)
         if isinstance(node, A.ClassDecl): return self._eval_class(node, env)
         if isinstance(node, A.StructDecl): return self._eval_struct(node, env)
@@ -354,6 +368,7 @@ class Interpreter:
                 bound._bound_to = obj
                 return bound
             return val
+        if isinstance(obj, _ModuleProxy): return obj.get(n.prop)
         if isinstance(obj, dict): return obj.get(n.prop)
         if isinstance(obj, str):
             if n.prop == "len": return len(obj)
@@ -496,6 +511,49 @@ class Interpreter:
         if not val:
             msg = self._to_str(self.eval(n.msg, env)) if n.msg else "Assertion failed"
             raise VeliceError(msg)
+
+    def _eval_import(self, n, env):
+        if n.path in ("gui",):
+            return self._import_gui(n, env)
+        loader = self.module_loader
+        if loader is None:
+            # attempt a default loader based on the current file, if known
+            from velice.moduleloader import ModuleLoader
+            loader = self.module_loader = ModuleLoader()
+        is_file = n.path.endswith(".velice") or n.module_path.endswith(".velice")
+        target = n.path if is_file else n.module_path
+        mod = loader.load(target, is_file=is_file)
+        exposed = loader.execute(mod, self, self.globals)
+        exposed = dict(mod["globals"])
+        name = n.alias or (target.split(".")[-1].split("/")[-1].replace(".velice", ""))
+        if n.items:
+            for item in n.items:
+                if item in exposed:
+                    env.define(item, exposed[item])
+            return None
+        if n.wildcard:
+            for k, v in exposed.items():
+                env.define(k, v)
+            return None
+        env.define(name, _ModuleProxy(exposed))
+        return None
+
+    def _import_gui(self, n, env):
+        try:
+            from velice import gui
+        except ImportError as e:
+            raise VeliceError(f"GUI framework unavailable: {e}")
+        namespace = {}
+        for name, obj in gui.EXPORTS.items():
+            namespace[name] = gui.make_builtin(self, name, obj)
+        if n.alias:
+            env.define(n.alias, _ModuleProxy(namespace))
+        elif n.items:
+            for item in n.items:
+                if item in namespace:
+                    env.define(item, namespace[item])
+        else:
+            env.define("gui", _ModuleProxy(namespace))
 
     def _eval_fn_decl(self, n, env):
         fn = VLFunction(n.name, n.params, n.body, env)
