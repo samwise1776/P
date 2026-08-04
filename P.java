@@ -40,6 +40,24 @@ public class P {
     static JPanel paint;
     static javax.swing.Timer singleTimer;
 
+    // ---- single player combat ----
+    static final int PLAYER_MAX_HEALTH = 1000;
+    static int playerHealth = PLAYER_MAX_HEALTH;
+    static int kills = 0;
+    static Weapon equippedWeapon = new Sword();
+    static Weapon currentWeapon = equippedWeapon;
+    static int facing = 1;
+    static long lastAttackMs = 0;
+    static long swingEffectUntil = 0;
+    static ArrayList<Enemy> enemies = new ArrayList<>();
+    static ArrayList<Projectile> projectiles = new ArrayList<>();
+    static long lastSpawnMs = 0;
+    static boolean bossAlive = false;
+    static int bossWaves = 0;
+    static long bossMessageUntil = 0;
+    static boolean gameOver = false;
+    static ArrayList<Weapon> ownedWeapons = new ArrayList<>();
+
     // ---- shared constants ----
     static final int HELP_DISCOUNT = 10000;
     static final int AREA_COST = 2000;
@@ -146,6 +164,10 @@ public class P {
             singleTimer.start();
         });
 
+        JButton weaponShopBtn = new JButton("Weapon Shop");
+        weaponShopBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
+        weaponShopBtn.addActionListener(e -> openWeaponShop(frame));
+
         JButton mpBtn = new JButton("Start Multiplayer");
         mpBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
         mpBtn.addActionListener(e -> {
@@ -216,6 +238,8 @@ public class P {
         center.add(Box.createVerticalStrut(20));
         center.add(startBtn);
         center.add(Box.createVerticalStrut(8));
+        center.add(weaponShopBtn);
+        center.add(Box.createVerticalStrut(8));
         center.add(mpBtn);
         center.add(Box.createVerticalStrut(8));
         center.add(pubBtn);
@@ -258,21 +282,30 @@ public class P {
                     }
                 }
 
+                for (Enemy e : enemies) {
+                    if (!e.dead) e.draw(g2d);
+                }
+
                 drawCharacter(g2d, circleX, circleY, new Color(40, 100, 200));
 
-                // UI
-                g2d.setFont(new Font("Arial", Font.BOLD, 16));
-                g2d.setColor(Color.BLACK);
-                g2d.drawString("Money: $" + money + " / $" + maxMoneyCap, 20, 30);
-                g2d.drawString("Steps: " + steps, 20, 55);
-                g2d.drawString("Money/Step: $" + moneyMultiplier, 20, 80);
-                g2d.drawString("SPACE/W to jump (+2 steps)", 20, 105);
-                g2d.drawString("Jumps Left: " + jumpsLeft, 20, 130);
+                for (Projectile pr : projectiles) pr.draw(g2d);
 
-                if (steps <= 0) {
-                    g2d.setColor(Color.RED);
-                    g2d.drawString("OUT OF STEPS! Buy more below.", 20, 155);
+                if (currentWeapon != null && !currentWeapon.ranged && System.currentTimeMillis() < swingEffectUntil) {
+                    g2d.setColor(new Color(255, 255, 180, 130));
+                    int reach = currentWeapon.range;
+                    g2d.drawArc(circleX + 22 - reach, circleY + 30 - reach, reach * 2, reach * 2,
+                            facing > 0 ? -70 : 110, 140);
                 }
+
+                if (System.currentTimeMillis() < bossMessageUntil) {
+                    g2d.setColor(new Color(255, 40, 40));
+                    g2d.setFont(new Font("Arial", Font.BOLD, 34));
+                    String m = "A BOSS HAS ARRIVED!";
+                    g2d.drawString(m, w / 2 - g2d.getFontMetrics().stringWidth(m) / 2, h / 2);
+                }
+
+                drawBossBar(g2d, w);
+                drawPlayerHud(g2d);
             }
         };
         paint.setBackground(Color.WHITE);
@@ -383,6 +416,14 @@ public class P {
         im.put(KeyStroke.getKeyStroke(KeyEvent.VK_A, 0), "left");
         im.put(KeyStroke.getKeyStroke('D'), "right");
         im.put(KeyStroke.getKeyStroke(KeyEvent.VK_D, 0), "right");
+        im.put(KeyStroke.getKeyStroke('F'), "attack");
+        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_F, 0), "attack");
+
+        am.put("attack", new AbstractAction() {
+            public void actionPerformed(ActionEvent e) {
+                if (!gameOver) playerAttack();
+            }
+        });
 
         am.put("jump", new AbstractAction() {
             public void actionPerformed(ActionEvent e) {
@@ -430,6 +471,34 @@ public class P {
                 onGround = true;
             }
             circleX = clamp(circleX, 0, paint.getWidth() - 50);
+
+            // ---- combat update ----
+            long now = System.currentTimeMillis();
+            if (!gameOver) {
+                if (!bossAlive && kills >= 25 * (bossWaves + 1)) {
+                    bossAlive = true;
+                    bossWaves++;
+                    Boss b = new Boss(paint.getWidth() / 2);
+                    b.y = gY;
+                    b.onGround = true;
+                    enemies.add(b);
+                    bossMessageUntil = now + 2500;
+                }
+                if (!bossAlive && enemies.size() < 6 && now - lastSpawnMs > 3000) {
+                    lastSpawnMs = now;
+                    int ex = Math.random() < 0.5 ? -40 : paint.getWidth();
+                    Enemy en = Math.random() < 0.4 ? new RangedEnemy(ex) : new MeleeEnemy(ex);
+                    en.y = gY;
+                    en.onGround = true;
+                    enemies.add(en);
+                }
+                for (Enemy en : enemies) {
+                    if (!en.dead) en.act(paint.getWidth(), paint.getHeight());
+                }
+                enemies.removeIf(en -> en.dead);
+                for (Projectile pr : projectiles) pr.update();
+                projectiles.removeIf(pr -> pr.dead);
+            }
             paint.repaint();
         });
     }
@@ -448,12 +517,26 @@ public class P {
         onGround = false;
         jumpsLeft = 50;
         areaBought = new boolean[areaX.length];
+        playerHealth = PLAYER_MAX_HEALTH;
+        kills = 0;
+        currentWeapon = equippedWeapon;
+        facing = 1;
+        lastAttackMs = 0;
+        swingEffectUntil = 0;
+        enemies.clear();
+        projectiles.clear();
+        lastSpawnMs = 0;
+        bossAlive = false;
+        bossWaves = 0;
+        bossMessageUntil = 0;
+        gameOver = false;
     }
 
     private static void move(int dx, JPanel panel) {
         if (steps <= 0) return;
 
         circleX = clamp(circleX + dx, 0, panel.getWidth() - 50);
+        if (dx != 0) facing = dx > 0 ? 1 : -1;
 
         if (!isVip()) steps--;
 
@@ -1045,7 +1128,7 @@ public class P {
             x = 200;
             y = 0;
             steps = vip ? Integer.MAX_VALUE : 30;
-            money = 0;
+            money = vip ? Integer.MAX_VALUE : 30;
             jumpsLeft = 50;
             moneyMultiplier = vip ? 500 : 10;
             maxMoneyCap = vip ? Integer.MAX_VALUE : 10000;
@@ -1278,6 +1361,499 @@ public class P {
         }
     }
 
+    // ================= WEAPONS =================
+    static abstract class Weapon {
+        String name;
+        int damage;
+        int range;
+        boolean ranged;
+        long cooldownMs;
+        int price;
+        int projSpeed;
+        String desc;
+
+        Weapon(String name, int damage, int range, boolean ranged, long cooldownMs, int price, int projSpeed, String desc) {
+            this.name = name;
+            this.damage = damage;
+            this.range = range;
+            this.ranged = ranged;
+            this.cooldownMs = cooldownMs;
+            this.price = price;
+            this.projSpeed = projSpeed;
+            this.desc = desc;
+        }
+    }
+
+    static class Sword extends Weapon { Sword() { super("Sword", 35, 85, false, 500, 0, 0, "A balanced starting blade. 35 dmg."); } }
+    static class Spear extends Weapon { Spear() { super("Spear", 45, 130, false, 550, 80, 0, "Long reach melee. 45 dmg."); } }
+    static class Axe extends Weapon { Axe() { super("Axe", 60, 85, false, 750, 50, 0, "Heavy melee. 60 dmg."); } }
+    static class Hammer extends Weapon { Hammer() { super("Hammer", 95, 95, false, 1200, 200, 0, "Massive slow smash. 95 dmg."); } }
+    static class Bow extends Weapon { Bow() { super("Bow", 30, 650, true, 450, 60, 12, "Quick long-range arrows. 30 dmg."); } }
+    static class Crossbow extends Weapon { Crossbow() { super("Crossbow", 50, 700, true, 900, 150, 14, "Powerful ranged bolts. 50 dmg."); } }
+    static class MagicStaff extends Weapon { MagicStaff() { super("Magic Staff", 80, 550, true, 1100, 300, 9, "Slow magic bolts. 80 dmg."); } }
+
+    static final Weapon[] ALL_WEAPONS = {new Sword(), new Spear(), new Axe(), new Hammer(), new Bow(), new Crossbow(), new MagicStaff()};
+
+    static Weapon weaponOf(Class<? extends Weapon> cls) {
+        if (cls.equals(Spear.class)) return new Spear();
+        if (cls.equals(Axe.class)) return new Axe();
+        if (cls.equals(Hammer.class)) return new Hammer();
+        if (cls.equals(Bow.class)) return new Bow();
+        if (cls.equals(Crossbow.class)) return new Crossbow();
+        if (cls.equals(MagicStaff.class)) return new MagicStaff();
+        return new Sword();
+    }
+
+    static Weapon weaponByName(String name) {
+        for (Weapon w : ALL_WEAPONS) {
+            if (w.name.equalsIgnoreCase(name)) return weaponOf(w.getClass());
+        }
+        return null;
+    }
+
+    static void damagePlayer(int dmg) {
+        if (gameOver) return;
+        playerHealth -= dmg;
+        if (playerHealth <= 0) {
+            playerHealth = 0;
+            gameOver = true;
+            singleTimer.stop();
+            JOptionPane.showMessageDialog(paint, "You were defeated! Kills: " + kills);
+            layoutCards.show(rootCards, "start");
+        }
+    }
+
+    static void playerAttack() {
+        if (gameOver || currentWeapon == null) return;
+        long now = System.currentTimeMillis();
+        if (now - lastAttackMs < currentWeapon.cooldownMs) return;
+        lastAttackMs = now;
+        if (currentWeapon.ranged) {
+            int sx = circleX + 22 + facing * 24;
+            int sy = circleY + 32;
+            Color c = currentWeapon instanceof Bow ? new Color(150, 100, 60)
+                    : currentWeapon instanceof Crossbow ? new Color(90, 70, 55)
+                    : new Color(120, 80, 220);
+            projectiles.add(new Projectile(sx, sy, facing * currentWeapon.projSpeed, 0, currentWeapon.damage, false, c));
+        } else {
+            swingEffectUntil = now + 120;
+            int reach = currentWeapon.range;
+            int pcx = circleX + 22, pcy = circleY + 30;
+            for (Enemy e : enemies) {
+                if (e.dead) continue;
+                int cx = e.x + e.width / 2, cy = e.y - e.height / 2;
+                int ddx = cx - pcx, ddy = cy - pcy;
+                if (facing > 0 && ddx < -24) continue;
+                if (facing < 0 && ddx > 24) continue;
+                if (ddx * ddx + ddy * ddy < reach * reach) e.hurt(currentWeapon.damage);
+            }
+        }
+    }
+
+    // ================= ENEMIES & PROJECTILES =================
+    static abstract class Enemy {
+        int x, y, health, maxHealth, damage, speed, width, height, range;
+        boolean ranged;
+        double velY = 0;
+        boolean onGround = false, dead = false;
+        long lastAttackMs = 0;
+        Color color;
+
+        Enemy(int health, int damage, int speed, int range, boolean ranged, Color color, int w, int h) {
+            this.maxHealth = health;
+            this.health = health;
+            this.damage = damage;
+            this.speed = speed;
+            this.range = range;
+            this.ranged = ranged;
+            this.color = color;
+            this.width = w;
+            this.height = h;
+        }
+
+        int faceDir() {
+            return circleX - x >= 0 ? 1 : -1;
+        }
+
+        void gravity(int panelHeight) {
+            velY += 0.8;
+            y += (int) velY;
+            int gY = panelHeight - 185;
+            if (y >= gY) {
+                y = gY;
+                velY = 0;
+                onGround = true;
+            }
+        }
+
+        void hurt(int dmg) {
+            if (dead) return;
+            health -= dmg;
+            if (health <= 0) {
+                health = 0;
+                dead = true;
+                onKilled();
+            }
+        }
+
+        void onKilled() {
+            if (maxHealth >= 500) {
+                money = (int) Math.min((long) maxMoneyCap, (long) money + 500);
+                playerPoints += 25;
+                setPoints(playerName, playerPoints);
+                saveData();
+                startPointsLabel.setText("Points: " + playerPoints);
+                bossAlive = false;
+                JOptionPane.showMessageDialog(paint, "BOSS DEFEATED!\n+$500 and +25 points!");
+            } else {
+                money = (int) Math.min((long) maxMoneyCap, (long) money + 50);
+                kills++;
+                if (kills % 5 == 0) {
+                    playerPoints++;
+                    setPoints(playerName, playerPoints);
+                    saveData();
+                    startPointsLabel.setText("Points: " + playerPoints);
+                }
+            }
+        }
+
+        void draw(Graphics2D g2d) {
+            // legs
+            g2d.setColor(new Color(60, 40, 30));
+            g2d.fillRect(x + width / 2 - 8, y - 14, 7, 14);
+            g2d.fillRect(x + width / 2 + 1, y - 14, 7, 14);
+            // body
+            g2d.setColor(color);
+            g2d.fillOval(x, y - height, width, height);
+            // head
+            g2d.setColor(color.darker());
+            g2d.fillOval(x + width / 4, y - height - 16, width / 2, 16);
+            // eyes
+            g2d.setColor(Color.WHITE);
+            g2d.fillOval(x + width / 2 - 10, y - height - 12, 7, 7);
+            g2d.fillOval(x + width / 2 + 3, y - height - 12, 7, 7);
+            g2d.setColor(Color.BLACK);
+            g2d.fillOval(x + width / 2 - 8, y - height - 10, 3, 3);
+            g2d.fillOval(x + width / 2 + 5, y - height - 10, 3, 3);
+            // bow for archers
+            if (ranged) {
+                g2d.setColor(new Color(150, 105, 60));
+                int dir = faceDir();
+                int cx = x + width / 2;
+                g2d.drawArc(cx + (dir > 0 ? 8 : -26), y - height - 4, 18, 24, dir > 0 ? -90 : 90, 180);
+                g2d.drawLine(cx + (dir > 0 ? 17 : -9), y - height, cx + (dir > 0 ? 17 : -9), y - height + 24);
+            }
+            drawHealthBar(g2d);
+        }
+
+        void drawHealthBar(Graphics2D g2d) {
+            int barW = Math.max(34, width + 6);
+            int barH = 6;
+            int bx = x - 3, by = y - height - 20;
+            g2d.setColor(new Color(0, 0, 0, 160));
+            g2d.fillRect(bx, by, barW, barH);
+            g2d.setColor(health > maxHealth / 3 ? new Color(70, 210, 70) : new Color(220, 70, 60));
+            g2d.fillRect(bx, by, (int) (barW * Math.max(0, health) / (double) maxHealth), barH);
+            g2d.setColor(Color.BLACK);
+            g2d.drawRect(bx, by, barW, barH);
+        }
+
+        abstract void act(int panelWidth, int panelHeight);
+    }
+
+    static class MeleeEnemy extends Enemy {
+        MeleeEnemy(int x) {
+            super(100, 10, 2, 55, false, new Color(210, 70, 60), 40, 46);
+            this.x = x;
+        }
+
+        void act(int panelWidth, int panelHeight) {
+            gravity(panelHeight);
+            int dx = circleX - this.x;
+            if (Math.abs(dx) > range) {
+                x = clamp(x + (dx > 0 ? 1 : -1) * speed, 0, panelWidth - width);
+            }
+            long now = System.currentTimeMillis();
+            if (Math.abs(dx) <= range + 34 && Math.abs(circleY - (y - height)) < 90) {
+                if (now - lastAttackMs > 800) {
+                    lastAttackMs = now;
+                    damagePlayer(damage);
+                }
+            }
+        }
+    }
+
+    static class RangedEnemy extends Enemy {
+        RangedEnemy(int x) {
+            super(100, 25, 1, 320, true, new Color(150, 90, 210), 36, 44);
+            this.x = x;
+        }
+
+        void act(int panelWidth, int panelHeight) {
+            gravity(panelHeight);
+            int dx = circleX - this.x;
+            if (Math.abs(dx) > range) {
+                x = clamp(x + (dx > 0 ? 1 : -1) * speed, 0, panelWidth - width);
+            } else if (Math.abs(dx) < 150) {
+                x = clamp(x - (dx > 0 ? 1 : -1) * speed, 0, panelWidth - width);
+            }
+            long now = System.currentTimeMillis();
+            if (now - lastAttackMs > 1200) {
+                lastAttackMs = now;
+                double sx = x + width / 2.0, sy = y - height / 2.0;
+                double tx = circleX + 22, ty = circleY + 30;
+                double nx = tx - sx, ny = ty - sy;
+                double len = Math.hypot(nx, ny);
+                if (len > 0) {
+                    double sp = 9;
+                    projectiles.add(new Projectile((int) sx, (int) sy, nx / len * sp, ny / len * sp, 25, true, new Color(140, 90, 50)));
+                }
+            }
+        }
+    }
+
+    static class Boss extends Enemy {
+        Boss(int x) {
+            super(500, 200, 1, 100, false, new Color(110, 20, 160), 92, 110);
+            this.x = x;
+        }
+
+        void act(int panelWidth, int panelHeight) {
+            gravity(panelHeight);
+            int dx = circleX - this.x;
+            if (Math.abs(dx) > range) {
+                x = clamp(x + (dx > 0 ? 1 : -1) * speed, 0, panelWidth - width);
+            }
+            long now = System.currentTimeMillis();
+            if (now - lastAttackMs > 1500) {
+                lastAttackMs = now;
+                if (Math.abs(dx) > 220) {
+                    double sx = x + width / 2.0, sy = y - height / 2.0;
+                    double tx = circleX + 22, ty = circleY + 30;
+                    double nx = tx - sx, ny = ty - sy;
+                    double len = Math.hypot(nx, ny);
+                    if (len > 0) {
+                        double sp = 7;
+                        projectiles.add(new Projectile((int) sx, (int) sy, nx / len * sp, ny / len * sp, 200, true, new Color(200, 60, 220)));
+                    }
+                } else if (Math.abs(circleY - (y - height)) < 120) {
+                    damagePlayer(200);
+                }
+            }
+        }
+    }
+
+    static class Projectile {
+        int x, y;
+        double vx, vy;
+        int damage;
+        boolean fromEnemy;
+        Color color;
+        boolean dead = false;
+
+        Projectile(int x, int y, double vx, double vy, int damage, boolean fromEnemy, Color color) {
+            this.x = x;
+            this.y = y;
+            this.vx = vx;
+            this.vy = vy;
+            this.damage = damage;
+            this.fromEnemy = fromEnemy;
+            this.color = color;
+        }
+
+        void update() {
+            x += (int) vx;
+            y += (int) vy;
+            if (x < -80 || x > 1400 || y < -80 || y > 900) {
+                dead = true;
+                return;
+            }
+            if (fromEnemy) {
+                if (Math.abs(x - (circleX + 22)) < 26 && Math.abs(y - (circleY + 30)) < 42) {
+                    damagePlayer(damage);
+                    dead = true;
+                }
+            } else {
+                for (Enemy e : enemies) {
+                    if (e.dead) continue;
+                    int cx = e.x + e.width / 2, cy = e.y - e.height / 2;
+                    if (Math.abs(x - cx) < e.width / 2 + 8 && Math.abs(y - cy) < e.height / 2 + 8) {
+                        e.hurt(damage);
+                        dead = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        void draw(Graphics2D g2d) {
+            g2d.setColor(color);
+            g2d.setStroke(new BasicStroke(3));
+            double len = Math.hypot(vx, vy);
+            if (len > 0) {
+                int tipX = x + (int) (vx / len * 14), tipY = y + (int) (vy / len * 14);
+                g2d.drawLine(x, y, tipX, tipY);
+                double px = -vy / len, py = vx / len;
+                g2d.drawLine(tipX, tipY, tipX - (int) (px * 5) - (int) (vx / len * 5), tipY - (int) (py * 5) - (int) (vy / len * 5));
+                g2d.drawLine(tipX, tipY, tipX + (int) (px * 5) - (int) (vx / len * 5), tipY + (int) (py * 5) - (int) (vy / len * 5));
+            } else {
+                g2d.fillOval(x - 4, y - 4, 8, 8);
+            }
+            g2d.setStroke(new BasicStroke(1));
+        }
+    }
+
+    // ================= COMBAT HUD =================
+    static void drawPlayerHud(Graphics2D g2d) {
+        int bw = 190, bh = 16;
+        int bx = 20, by = 20;
+        g2d.setColor(new Color(0, 0, 0, 140));
+        g2d.fillRoundRect(bx - 2, by - 2, bw + 4, bh + 4, 6, 6);
+        g2d.setColor(new Color(120, 20, 20));
+        g2d.fillRoundRect(bx, by, bw, bh, 4, 4);
+        g2d.setColor(new Color(60, 210, 60));
+        g2d.fillRoundRect(bx, by, (int) (bw * Math.max(0, playerHealth) / (double) PLAYER_MAX_HEALTH), bh, 4, 4);
+        g2d.setColor(Color.WHITE);
+        g2d.setFont(new Font("Arial", Font.BOLD, 11));
+        g2d.drawString("HP " + Math.max(0, playerHealth) + "/" + PLAYER_MAX_HEALTH, bx + 5, by + 13);
+
+        g2d.setColor(Color.BLACK);
+        g2d.setFont(new Font("Arial", Font.BOLD, 15));
+        g2d.drawString("Money: $" + money + " / $" + maxMoneyCap, 20, 58);
+        g2d.drawString("Steps: " + steps, 20, 80);
+        g2d.drawString("Money/Step: $" + moneyMultiplier, 20, 102);
+        g2d.drawString("SPACE/W to jump (+2 steps)", 20, 124);
+        g2d.drawString("Jumps Left: " + jumpsLeft, 20, 146);
+        g2d.drawString("Kills: " + kills + " | Boss in " + (25 * (bossWaves + 1) - kills) + " | " + (currentWeapon != null ? currentWeapon.name + (currentWeapon.ranged ? " (F to shoot)" : " (F to swing)") : ""), 20, 168);
+
+        if (steps <= 0) {
+            g2d.setColor(Color.RED);
+            g2d.drawString("OUT OF STEPS! Buy more below.", 20, 190);
+        }
+    }
+
+    static void drawBossBar(Graphics2D g2d, int w) {
+        Enemy boss = null;
+        for (Enemy e : enemies) {
+            if (e.maxHealth >= 500 && !e.dead) {
+                boss = e;
+                break;
+            }
+        }
+        if (boss == null) return;
+        int bw = 360, bh = 18;
+        int bx = (w - bw) / 2, by = 16;
+        g2d.setColor(new Color(0, 0, 0, 150));
+        g2d.fillRoundRect(bx - 2, by - 2, bw + 4, bh + 4, 8, 8);
+        g2d.setColor(new Color(90, 20, 20));
+        g2d.fillRoundRect(bx, by, bw, bh, 6, 6);
+        g2d.setColor(new Color(210, 40, 40));
+        g2d.fillRoundRect(bx, by, (int) (bw * Math.max(0, boss.health) / (double) boss.maxHealth), bh, 6, 6);
+        g2d.setColor(Color.WHITE);
+        g2d.setFont(new Font("Arial", Font.BOLD, 12));
+        g2d.drawString("BOSS  " + Math.max(0, boss.health) + "/" + boss.maxHealth, bx + 8, by + 14);
+    }
+
+    // ================= WEAPON SHOP =================
+    static JList<String> weaponShopList;
+    static JTextArea weaponShopInfo;
+    static JLabel weaponShopPoints;
+
+    static void openWeaponShop(JFrame frame) {
+        JPanel panel = new JPanel(new BorderLayout(8, 8));
+        DefaultListModel<String> model = new DefaultListModel<>();
+        for (Weapon w : ALL_WEAPONS) {
+            model.addElement(w.name + "   $" + w.price + "   " + (w.ranged ? "Long-Ranged" : "Melee"));
+        }
+        weaponShopList = new JList<>(model);
+        weaponShopList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        weaponShopList.addListSelectionListener(e -> updateWeaponShopInfo());
+        JScrollPane sp = new JScrollPane(weaponShopList);
+        sp.setPreferredSize(new Dimension(290, 230));
+
+        weaponShopInfo = new JTextArea(7, 34);
+        weaponShopInfo.setEditable(false);
+        weaponShopInfo.setFont(new Font("Monospaced", Font.PLAIN, 13));
+
+        weaponShopPoints = new JLabel("Points: " + playerPoints);
+        weaponShopPoints.setFont(new Font("Arial", Font.BOLD, 14));
+
+        JButton buyBtn = new JButton("Buy");
+        JButton equipBtn = new JButton("Equip");
+        buyBtn.addActionListener(e -> {
+            int idx = weaponShopList.getSelectedIndex();
+            if (idx < 0) return;
+            Weapon w = ALL_WEAPONS[idx];
+            boolean owned = ownedWeapons.stream().anyMatch(ow -> ow.getClass().equals(w.getClass()));
+            if (owned) {
+                JOptionPane.showMessageDialog(frame, "You already own the " + w.name + "!");
+                return;
+            }
+            if (playerPoints < w.price) {
+                JOptionPane.showMessageDialog(frame, "Not enough points! Need " + w.price + " (get points by killing enemies and bosses).");
+                return;
+            }
+            playerPoints -= w.price;
+            Weapon ownedW = weaponOf(w.getClass());
+            ownedWeapons.add(ownedW);
+            equippedWeapon = ownedW;
+            currentWeapon = ownedW;
+            setPoints(playerName, playerPoints);
+            saveData();
+            weaponShopPoints.setText("Points: " + playerPoints);
+            updateWeaponShopInfo();
+            JOptionPane.showMessageDialog(frame, "Bought " + w.name + "! Damage: " + w.damage);
+        });
+        equipBtn.addActionListener(e -> {
+            int idx = weaponShopList.getSelectedIndex();
+            if (idx < 0) return;
+            Weapon w = ALL_WEAPONS[idx];
+            boolean owned = ownedWeapons.stream().anyMatch(ow -> ow.getClass().equals(w.getClass()));
+            if (!owned) {
+                JOptionPane.showMessageDialog(frame, "Buy the " + w.name + " first!");
+                return;
+            }
+            equippedWeapon = weaponOf(w.getClass());
+            currentWeapon = equippedWeapon;
+            saveData();
+            updateWeaponShopInfo();
+            JOptionPane.showMessageDialog(frame, "Equipped " + w.name + "!");
+        });
+
+        weaponShopList.setSelectedIndex(0);
+        JPanel bottom = new JPanel(new FlowLayout());
+        bottom.add(buyBtn);
+        bottom.add(equipBtn);
+        bottom.add(weaponShopPoints);
+        panel.add(sp, BorderLayout.WEST);
+        panel.add(weaponShopInfo, BorderLayout.CENTER);
+        panel.add(bottom, BorderLayout.SOUTH);
+        JOptionPane.showConfirmDialog(frame, panel, "Weapon Shop", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+    }
+
+    static void updateWeaponShopInfo() {
+        int idx = weaponShopList.getSelectedIndex();
+        if (idx < 0) {
+            weaponShopInfo.setText("");
+            return;
+        }
+        Weapon w = ALL_WEAPONS[idx];
+        boolean owned = ownedWeapons.stream().anyMatch(ow -> ow.getClass().equals(w.getClass()));
+        StringBuilder sb = new StringBuilder();
+        sb.append(w.name).append("  |  ").append(w.ranged ? "Long-Ranged" : "Melee").append("\n");
+        sb.append("Damage: ").append(w.damage).append("\n");
+        sb.append(w.ranged ? "Range: " : "Reach: ").append(w.range).append("px\n");
+        sb.append("Cooldown: ").append(w.cooldownMs).append("ms\n");
+        sb.append("Price: ").append(w.price).append(" points\n\n");
+        sb.append(w.desc).append("\n");
+        if (owned) {
+            sb.append(equippedWeapon != null && equippedWeapon.getClass().equals(w.getClass()) ? "[OWNED] [EQUIPPED]" : "[OWNED]");
+        } else {
+            sb.append("[NOT OWNED]");
+        }
+        weaponShopInfo.setText(sb.toString());
+    }
+
     // ================= PERSISTENCE =================
     static void loadData() {
         try {
@@ -1310,6 +1886,29 @@ public class P {
             br.close();
         } catch (Exception ignored) {
         }
+        try {
+            BufferedReader br = new BufferedReader(new FileReader("friendrun_weapons.txt"));
+            String first = br.readLine();
+            String line;
+            ownedWeapons.clear();
+            while ((line = br.readLine()) != null) {
+                if (!line.trim().isEmpty()) {
+                    Weapon w = weaponByName(line.trim());
+                    if (w != null && !ownedWeapons.stream().anyMatch(ow -> ow.getClass().equals(w.getClass()))) {
+                        ownedWeapons.add(w);
+                    }
+                }
+            }
+            br.close();
+            if (ownedWeapons.isEmpty()) ownedWeapons.add(new Sword());
+            Weapon eq = weaponByName(first == null ? "Sword" : first.trim());
+            equippedWeapon = eq != null ? eq : ownedWeapons.get(0);
+            currentWeapon = equippedWeapon;
+        } catch (Exception ignored) {
+            if (ownedWeapons.isEmpty()) ownedWeapons.add(new Sword());
+            equippedWeapon = ownedWeapons.get(0);
+            currentWeapon = equippedWeapon;
+        }
     }
 
     static void saveData() {
@@ -1332,6 +1931,15 @@ public class P {
             PrintWriter w = new PrintWriter(new FileWriter("friendrun_friends.txt"));
             for (String f : friends) {
                 w.println(f);
+            }
+            w.close();
+        } catch (Exception ignored) {
+        }
+        try {
+            PrintWriter w = new PrintWriter(new FileWriter("friendrun_weapons.txt"));
+            w.println(equippedWeapon != null ? equippedWeapon.name : "Sword");
+            for (Weapon ow : ownedWeapons) {
+                w.println(ow.name);
             }
             w.close();
         } catch (Exception ignored) {
