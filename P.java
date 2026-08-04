@@ -41,7 +41,7 @@ public class P {
     static javax.swing.Timer singleTimer;
 
     // ---- single player combat ----
-    static final int PLAYER_MAX_HEALTH = 1000;
+    static final int PLAYER_MAX_HEALTH = 5000;
     static int playerHealth = PLAYER_MAX_HEALTH;
     static int kills = 0;
     static Weapon equippedWeapon = new Sword();
@@ -425,10 +425,37 @@ public class P {
         im.put(KeyStroke.getKeyStroke(KeyEvent.VK_D, 0), "right");
         im.put(KeyStroke.getKeyStroke('F'), "attack");
         im.put(KeyStroke.getKeyStroke(KeyEvent.VK_F, 0), "attack");
+        for (int i = 0; i <= 9; i++) {
+            im.put(KeyStroke.getKeyStroke(Character.forDigit(i, 10)), "weapon" + i);
+            im.put(KeyStroke.getKeyStroke((char) ('0' + i)), "weapon" + i);
+        }
+        im.put(KeyStroke.getKeyStroke('Q'), "prevWeapon");
+        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_Q, 0), "prevWeapon");
+        im.put(KeyStroke.getKeyStroke('E'), "nextWeapon");
+        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_E, 0), "nextWeapon");
 
         am.put("attack", new AbstractAction() {
             public void actionPerformed(ActionEvent e) {
                 if (!gameOver) playerAttack();
+            }
+        });
+
+        for (int i = 0; i <= 9; i++) {
+            final int idx = i;
+            am.put("weapon" + i, new AbstractAction() {
+                public void actionPerformed(ActionEvent e) {
+                    if (!gameOver) switchWeapon(idx);
+                }
+            });
+        }
+        am.put("prevWeapon", new AbstractAction() {
+            public void actionPerformed(ActionEvent e) {
+                if (!gameOver) cycleWeapon(-1);
+            }
+        });
+        am.put("nextWeapon", new AbstractAction() {
+            public void actionPerformed(ActionEvent e) {
+                if (!gameOver) cycleWeapon(1);
             }
         });
 
@@ -1488,6 +1515,24 @@ public class P {
         }
     }
 
+    static void switchWeapon(int index) {
+        if (ownedWeapons.isEmpty()) return;
+        if (index < 1 || index > ownedWeapons.size()) return;
+        Weapon w = ownedWeapons.get(index - 1);
+        if (w == null) return;
+        currentWeapon = w;
+        lastAttackMs = 0;
+    }
+
+    static void cycleWeapon(int dir) {
+        if (ownedWeapons.isEmpty()) return;
+        int idx = ownedWeapons.indexOf(currentWeapon);
+        int n = ownedWeapons.size();
+        int next = ((idx + dir) % n + n) % n;
+        currentWeapon = ownedWeapons.get(next);
+        lastAttackMs = 0;
+    }
+
     // ================= ENEMIES & PROJECTILES =================
     static abstract class Enemy {
         int x, y, health, maxHealth, damage, speed, width, height, range;
@@ -1758,13 +1803,23 @@ public class P {
         g2d.drawString("Money: $" + money + " / $" + maxMoneyCap, 20, 58);
         g2d.drawString("Steps: " + steps, 20, 80);
         g2d.drawString("Money/Step: $" + moneyMultiplier, 20, 102);
-        g2d.drawString("SPACE/W to jump (+2 steps)", 20, 124);
-        g2d.drawString("Jumps Left: " + jumpsLeft, 20, 146);
-        g2d.drawString("Kills: " + kills + " | Boss in " + (25 * (bossWaves + 1) - kills) + " | " + (currentWeapon != null ? currentWeapon.name + (currentWeapon.ranged ? " (F to shoot)" : " (F to swing)") : ""), 20, 168);
+        g2d.drawString("Jumps Left: " + jumpsLeft, 20, 124);
 
+        // owned weapon hotkeys
+        g2d.setFont(new Font("Arial", Font.BOLD, 13));
+        int wy = 150;
+        for (int i = 0; i < ownedWeapons.size(); i++) {
+            Weapon w = ownedWeapons.get(i);
+            boolean eq = currentWeapon != null && currentWeapon.getClass().equals(w.getClass());
+            g2d.setColor(eq ? new Color(0, 120, 220) : Color.BLACK);
+            g2d.drawString((i + 1) + ": " + w.name + (eq ? "  <--" : ""), 20, wy);
+            wy += 18;
+        }
+        g2d.setColor(Color.BLACK);
+        g2d.drawString("Kills: " + kills + " | Boss in " + (25 * (bossWaves + 1) - kills) + " | Q/E to switch", 20, wy + 4);
         if (steps <= 0) {
             g2d.setColor(Color.RED);
-            g2d.drawString("OUT OF STEPS! Buy more below.", 20, 190);
+            g2d.drawString("OUT OF STEPS! Buy more below.", 20, wy + 24);
         }
     }
 
