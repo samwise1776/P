@@ -395,6 +395,10 @@ public class P {
         launchBack.setAlignmentX(Component.CENTER_ALIGNMENT);
         launchBack.addActionListener(e -> layoutCards.show(rootCards, "start"));
 
+        JButton docsBtn = new JButton("Documents");
+        docsBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
+        docsBtn.addActionListener(e -> layoutCards.show(rootCards, "docs"));
+
         lc.add(Box.createVerticalStrut(50));
         lc.add(ltitle);
         lc.add(Box.createVerticalStrut(12));
@@ -403,10 +407,14 @@ public class P {
         lc.add(versionBox);
         lc.add(Box.createVerticalStrut(16));
         lc.add(launchBtn);
+        lc.add(Box.createVerticalStrut(10));
+        lc.add(docsBtn);
         lc.add(Box.createVerticalStrut(14));
         lc.add(launchBack);
         launch.add(lc, BorderLayout.CENTER);
         rootCards.add(launch, "launch");
+
+        buildDocuments(frame);
     }
 
     static void launchVersion(JFrame frame, String tag) {
@@ -420,6 +428,83 @@ public class P {
             JOptionPane.showMessageDialog(frame, "Could not launch " + tag + ":\n" + ex.getMessage());
         }
     }
+
+    // ================= DOCUMENTS =================
+    static void buildDocuments(JFrame frame) {
+        JPanel p = new JPanel(new BorderLayout());
+        p.setBackground(new Color(240, 246, 252));
+
+        JEditorPane docs = new JEditorPane();
+        docs.setContentType("text/html");
+        docs.setEditable(false);
+        docs.setBorder(BorderFactory.createEmptyBorder(24, 28, 24, 28));
+        docs.setText(DOCS_HTML);
+
+        JScrollPane sp = new JScrollPane(docs);
+        sp.getVerticalScrollBar().setUnitIncrement(18);
+        p.add(sp, BorderLayout.CENTER);
+
+        JButton back = new JButton("Back to Launcher");
+        back.addActionListener(e -> layoutCards.show(rootCards, "launch"));
+        JPanel bar = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        bar.setBackground(new Color(210, 225, 240));
+        bar.add(back);
+        p.add(bar, BorderLayout.SOUTH);
+        rootCards.add(p, "docs");
+    }
+
+    static final String DOCS_HTML =
+        "<html><body bgcolor='#F0F6FC' text='#222222'>"
+        + "<div style='background-color:#0F3A5F; padding:18px;'>"
+        + "<h1 style='color:#FFFFFF; font-family:Arial, sans-serif; font-size:34px; margin:0;'>FRIENDRUN</h1>"
+        + "<p style='color:#BBD4EE; font-family:Arial, sans-serif; font-size:15px; margin:4px 0 0 0;'>The Documents &mdash; everything you need to know about the game</p>"
+        + "</div>"
+
+        + "<h2 style='color:#0F3A5F; font-family:Arial, sans-serif; font-size:24px;'>About the Game</h2>"
+        + "<p style='font-family:Georgia, serif; font-size:15px; line-height:1.5;'>"
+        + "FriendRun is a platformer and money-collecting game written in a single file of Java. You run, jump, buy, "
+        + "and fight your way to a better score. It started as nothing and grew into the game you can launch today &mdash; "
+        + "with monsters, weapons, bosses, treasure chests, levels, a level editor, and even multiplayer."
+        + "</p>"
+
+        + "<h2 style='color:#0F3A5F; font-family:Arial, sans-serif; font-size:24px;'>Author</h2>"
+        + "<p style='font-family:Georgia, serif; font-size:15px; line-height:1.5;'>"
+        + "Created by <b>Raymond. K.</b> &mdash; written entirely from scratch, one piece at a time."
+        + "</p>"
+
+        + "<h2 style='color:#0F3A5F; font-family:Arial, sans-serif; font-size:24px;'>How the Game Was Made</h2>"
+        + "<p style='font-family:Georgia, serif; font-size:15px; line-height:1.5;'>"
+        + "\u201CThis game was made not with intent &mdash; it used to be practice until my brother said it was addicting.\u201D"
+        + "<br><br>"
+        + "What began as practice code became a real game when people started playing it. Every version below is still "
+        + "launchable from the launcher, so you can watch it grow from the very beginning to today."
+        + "</p>"
+
+        + "<h2 style='color:#0F3A5F; font-family:Arial, sans-serif; font-size:24px;'>Versions &amp; How to Play</h2>"
+
+        + "<table width='100%' cellspacing='0' cellpadding='8' style='font-family:Arial, sans-serif; font-size:14px;'>"
+        + "<tr bgcolor='#0F3A5F'><td><b style='color:#FFFFFF;'>Version</b></td><td><b style='color:#FFFFFF;'>What It Is</b></td><td><b style='color:#FFFFFF;'>How to Play</b></td></tr>"
+        + "<tr bgcolor='#FFFFFF'><td><b>v0.1.0</b></td><td>The very first build. The earliest FriendRun ever made.</td><td>Run with the arrow keys / A and D, jump with W or Space, and grab money.</td></tr>"
+        + "<tr bgcolor='#E8F1F9'><td><b>v1.0.0 &ndash; v1.0.4</b></td><td>The classic money-walker. Walk, jump, and buy your way to fortune.</td><td>Move with A/D, jump with W/Space, buy steps and multipliers in the shop, own the boost areas, and fight friends.</td></tr>"
+        + "<tr bgcolor='#FFFFFF'><td><b>v1.0.5</b></td><td>Added public multiplayer to the classic game.</td><td>Same as the classic, plus Public Multiplayer to battle strangers on a server.</td></tr>"
+        + "<tr bgcolor='#E8F1F9'><td><b>v1.0.6 &ndash; v1.0.7</b></td><td>Combat arrives. Monsters, weapons, and bosses join the world.</td><td>Fight with F or by clicking, dodge projectiles, spend points on weapons, and beat bosses every 25 kills.</td></tr>"
+        + "<tr bgcolor='#FFFFFF'><td><b>v1.0.8 (Current)</b></td><td>The full game. 107 weapons, levels, chests, a level editor, and a launcher.</td><td>A/D move, Space/W jump, F attack, click to attack or open chests, 1-9 or Q/E/N to switch weapons. Kill monsters for points and level up &mdash; every level makes you tougher and stronger.</td></tr>"
+        + "</table>"
+
+        + "<h2 style='color:#0F3A5F; font-family:Arial, sans-serif; font-size:24px;'>Controls Cheat Sheet</h2>"
+        + "<p style='font-family:Georgia, serif; font-size:15px; line-height:1.7;'>"
+        + "<b>A / D</b> &mdash; move left / right<br>"
+        + "<b>Space / W</b> &mdash; jump<br>"
+        + "<b>F</b> &mdash; attack<br>"
+        + "<b>Mouse click</b> &mdash; attack toward the cursor, or open a chest<br>"
+        + "<b>1-9</b> &mdash; select a weapon<br>"
+        + "<b>Q / E / N</b> &mdash; cycle weapons"
+        + "</p>"
+
+        + "<div style='background-color:#0F3A5F; padding:10px;'>"
+        + "<p style='color:#FFFFFF; font-family:Arial, sans-serif; font-size:13px; margin:0;'>&copy; Raymond. K. &mdash; thanks for playing FriendRun!</p>"
+        + "</div>"
+        + "</body></html>";
 
     // ================= SINGLE PLAYER =================
     static void buildSinglePlayer(JFrame frame) {
