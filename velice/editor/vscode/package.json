@@ -18,12 +18,17 @@
     "language",
     "programming"
   ],
-  "icon": "icons/velice-icon.svg",
+  "icon": "icons/velice-icon.png",
   "galleryBanner": {
     "color": "#1e1e2e",
     "theme": "dark"
   },
-  "activationEvents": [],
+  "activationEvents": [
+    "onLanguage:velice",
+    "onCommand:velice.runFile",
+    "onCommand:velice.openRepl",
+    "onStartupFinished"
+  ],
   "main": "./extension.js",
   "contributes": {
     "languages": [
