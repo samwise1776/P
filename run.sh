@@ -1,1 +1,1 @@
-exec java P.java
+javac *.java && exec java P
