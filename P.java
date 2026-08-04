@@ -12,6 +12,11 @@ public class P {
     static ArrayList<String> friends = new ArrayList<>();
     static ArrayList<String[]> leaderboard = new ArrayList<>();
 
+    // Th3GreatPlayer VIP: infinite steps & storage, 500 money per step.
+    static boolean isVip() {
+        return playerName != null && playerName.equalsIgnoreCase("th3greatplayer");
+    }
+
     // ---- navigation ----
     static CardLayout layoutCards;
     static JPanel rootCards;
@@ -432,13 +437,13 @@ public class P {
     static void resetSinglePlayer() {
         circleX = 400;
         circleY = 300;
-        steps = 10;
+        steps = isVip() ? Integer.MAX_VALUE : 10;
         money = 0;
         stepCost = 10;
         maxMoneyCost = 25;
         multiplierCost = 25;
-        moneyMultiplier = 10;
-        maxMoneyCap = 1000;
+        moneyMultiplier = isVip() ? Integer.MAX_VALUE - 10 : 10;
+        maxMoneyCap = isVip() ? Integer.MAX_VALUE : 1000;
         velY = 0;
         onGround = false;
         jumpsLeft = 50;
@@ -450,7 +455,7 @@ public class P {
 
         circleX = clamp(circleX + dx, 0, panel.getWidth() - 50);
 
-        steps--;
+        if (!isVip()) steps--;
 
         if (money < maxMoneyCap) {
             int gain = moneyMultiplier * (inBoostArea() ? 2 : 1);
@@ -1036,13 +1041,14 @@ public class P {
         boolean[] areaOwned = new boolean[areaX.length];
 
         void reset() {
+            boolean vip = (this == local) && isVip();
             x = 200;
             y = 0;
-            steps = 30;
+            steps = vip ? Integer.MAX_VALUE : 30;
             money = 0;
             jumpsLeft = 50;
-            moneyMultiplier = 10;
-            maxMoneyCap = 10000;
+            moneyMultiplier = vip ? 500 : 10;
+            maxMoneyCap = vip ? Integer.MAX_VALUE : 10000;
             stepCost = 10;
             maxMoneyCost = 25;
             multiplierCost = 25;
