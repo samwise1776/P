@@ -44,7 +44,14 @@ public class P {
 
     // ---- multiplayer state ----
     static PlayerState local = new PlayerState();
-    static PlayerState rival = new PlayerState();
+    static ArrayList<PlayerState> bots = new ArrayList<>();
+    static int botCount = 1;
+    static final Color[] BOT_COLORS = {
+            new Color(200, 60, 60), new Color(230, 150, 0), new Color(160, 90, 210),
+            new Color(0, 150, 150), new Color(200, 60, 180), new Color(120, 170, 40),
+            new Color(90, 90, 210), new Color(210, 120, 160), new Color(140, 100, 60),
+            new Color(80, 80, 80)
+    };
     static volatile PlayerState remote = new PlayerState();
     static int timeLimit, timeLeft;
     static long matchStart;
@@ -468,17 +475,30 @@ public class P {
                 int h = getHeight();
                 int w = getWidth();
                 drawBackground(g2d, w, h);
-                drawZones(g2d, h, local, rival);
+
+                PlayerState botsOwned = new PlayerState();
+                for (PlayerState b : bots) {
+                    for (int i = 0; i < areaX.length; i++) {
+                        if (b.areaOwned[i]) botsOwned.areaOwned[i] = true;
+                    }
+                }
+                drawZones(g2d, h, local, botsOwned);
 
                 drawCharacter(g2d, local.x, local.y, new Color(40, 100, 200));
-                drawCharacter(g2d, rival.x, rival.y, new Color(200, 60, 60));
+                for (int i = 0; i < bots.size(); i++) {
+                    PlayerState b = bots.get(i);
+                    drawCharacter(g2d, b.x, b.y, BOT_COLORS[i % BOT_COLORS.length]);
+                    g2d.setFont(new Font("Arial", Font.PLAIN, 11));
+                    g2d.setColor(Color.BLACK);
+                    g2d.drawString(b.name, b.x + 2, b.y - 18);
+                }
 
                 // UI
                 g2d.setFont(new Font("Arial", Font.BOLD, 18));
                 g2d.setColor(Color.BLACK);
                 g2d.drawString("Time left: " + Math.max(0, timeLeft) + "s", 20, 30);
                 g2d.drawString(playerName + " (You): $" + local.money + " | Steps: " + local.steps + " | +$" + local.moneyMultiplier + "/step", 20, 55);
-                g2d.drawString(opponentName + ": $" + rival.money, 20, 80);
+                g2d.drawString("Opponents (" + bots.size() + " bots): $" + botsTotalMoney() + " | Best: " + bestBot().name + " $" + bestBot().money, 20, 80);
                 g2d.drawString("Move with A/D + jump with SPACE/W. Use the shop below!", 20, 105);
             }
         };
@@ -542,30 +562,36 @@ public class P {
                 int g = multiPaint.getHeight() - 185;
                 if (g > 0) {
                     local.y = g;
-                    rival.y = g;
                     local.onGround = true;
-                    rival.onGround = true;
+                    for (PlayerState b : bots) {
+                        b.y = g;
+                        b.onGround = true;
+                    }
                     playersPlaced = true;
                 }
             }
 
             applyGravity(local, multiPaint.getHeight());
-            applyGravity(rival, multiPaint.getHeight());
             local.x = clamp(local.x, 0, multiPaint.getWidth() - 50);
-            rival.x = clamp(rival.x, 0, multiPaint.getWidth() - 50);
+            for (PlayerState b : bots) {
+                applyGravity(b, multiPaint.getHeight());
+                b.x = clamp(b.x, 0, multiPaint.getWidth() - 50);
+            }
 
             // bot AI
             botCounter++;
             if (botCounter % 8 == 0) {
-                int dir = (int) (Math.random() * 3) - 1;
-                if (dir != 0 && rival.steps > 0) {
-                    movePlayer(rival, dir * 15, multiPaint.getWidth());
-                }
-                if (Math.random() < 0.2 && rival.onGround && rival.jumpsLeft > 0) {
-                    jumpPlayer(rival);
+                for (PlayerState b : bots) {
+                    int dir = (int) (Math.random() * 3) - 1;
+                    if (dir != 0 && b.steps > 0) {
+                        movePlayer(b, dir * 15, multiPaint.getWidth());
+                    }
+                    if (Math.random() < 0.2 && b.onGround && b.jumpsLeft > 0) {
+                        jumpPlayer(b);
+                    }
                 }
             }
-            botShop(rival);
+            for (PlayerState b : bots) botShop(b);
 
             multiPaint.repaint();
         });
@@ -581,16 +607,32 @@ public class P {
         }
         if (lim < 5) lim = 5;
 
+        String bt = JOptionPane.showInputDialog(rootCards, "How many AI opponents? (1-10, more = more lag):", "" + botCount);
+        int bc = botCount;
+        if (bt != null) {
+            try {
+                bc = Integer.parseInt(bt.trim());
+            } catch (Exception ignored) {
+            }
+        }
+        botCount = Math.max(1, Math.min(10, bc));
+
         opponentName = oName;
         opponentPoints = oPoints;
         timeLimit = lim;
 
         local.reset();
-        rival.reset();
+        bots.clear();
+        for (int i = 0; i < botCount; i++) {
+            PlayerState b = new PlayerState();
+            b.reset();
+            b.name = (i == 0) ? opponentName : "Rival " + (i + 1);
+            b.x = clamp(120 + 55 * i, 0, 700);
+            b.moneyMultiplier = Math.max(5, 10 + opponentPoints / 5 - i * 2);
+            b.steps = 30 + opponentPoints / 10;
+            bots.add(b);
+        }
         local.x = 200;
-        rival.x = 500;
-        rival.moneyMultiplier = 10 + opponentPoints / 5;
-        rival.steps = 30 + opponentPoints / 10;
         timeLeft = timeLimit;
         matchOver = false;
         botCounter = 0;
@@ -619,17 +661,18 @@ public class P {
         matchOver = true;
         matchTimer.stop();
 
-        boolean win = local.money > rival.money;
+        PlayerState best = bestBot();
+        boolean win = local.money > best.money;
         String msg;
         if (win) {
-            int gain = 1 + Math.max(0, (opponentPoints - playerPoints) / 5);
+            int gain = bots.size() + Math.max(0, (opponentPoints - playerPoints) / 5);
             playerPoints += gain;
             setPoints(playerName, playerPoints);
             saveData();
-            msg = "You win! $" + local.money + " vs $" + rival.money + "\nYou earned " + gain + " point(s)!";
+            msg = "You win! $" + local.money + " vs best " + best.name + " $" + best.money + "\nYou earned " + gain + " point(s)!";
             startPointsLabel.setText("Points: " + playerPoints);
         } else {
-            msg = "You lose! $" + local.money + " vs $" + rival.money + "\n" + opponentName + " wins.";
+            msg = "You lose! $" + local.money + " vs " + best.name + " $" + best.money + "\n" + best.name + " wins.";
         }
         JOptionPane.showMessageDialog(multiPaint, msg);
         layoutCards.show(rootCards, "start");
@@ -983,6 +1026,7 @@ public class P {
 
     // ================= PLAYER STATE & MULTIPLAYER HELPERS =================
     static class PlayerState {
+        String name = "";
         int x = 200, y = 0;
         int steps = 30, money = 0, jumpsLeft = 50;
         int moneyMultiplier = 10, maxMoneyCap = 10000;
@@ -1063,6 +1107,20 @@ public class P {
         for (int i = 0; i < areaX.length; i++) {
             ps.areaOwned[i] = (bits & (1 << i)) != 0;
         }
+    }
+
+    static PlayerState bestBot() {
+        PlayerState best = bots.get(0);
+        for (PlayerState b : bots) {
+            if (b.money > best.money) best = b;
+        }
+        return best;
+    }
+
+    static long botsTotalMoney() {
+        long total = 0;
+        for (PlayerState b : bots) total += b.money;
+        return total;
     }
 
     static void drawZones(Graphics2D g2d, int h, PlayerState a, PlayerState b) {
