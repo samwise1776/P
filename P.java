@@ -128,7 +128,7 @@ public class P {
 
         frame.add(rootCards);
         frame.setVisible(true);
-        layoutCards.show(rootCards, "start");
+        layoutCards.show(rootCards, "launch");
     }
 
     // ================= START SCREEN =================
@@ -213,6 +213,10 @@ public class P {
             layoutCards.show(rootCards, "leaderboard");
         });
 
+        JButton launcherBtn = new JButton("Launcher");
+        launcherBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
+        launcherBtn.addActionListener(e -> layoutCards.show(rootCards, "launch"));
+
         JPanel friendPanel = new JPanel(new FlowLayout());
         friendPanel.setOpaque(false);
         JTextField friendField = new JTextField(10);
@@ -254,6 +258,8 @@ public class P {
         center.add(Box.createVerticalStrut(20));
         center.add(startBtn);
         center.add(Box.createVerticalStrut(8));
+        center.add(launcherBtn);
+        center.add(Box.createVerticalStrut(8));
         center.add(weaponShopBtn);
         center.add(Box.createVerticalStrut(8));
         center.add(makeLevelBtn);
@@ -268,6 +274,99 @@ public class P {
 
         p.add(center, BorderLayout.CENTER);
         rootCards.add(p, "start");
+
+        // ================= LAUNCH SCREEN =================
+        JPanel launch = new JPanel(new BorderLayout());
+        launch.setBackground(new Color(20, 30, 55));
+        JPanel lc = new JPanel();
+        lc.setOpaque(false);
+        lc.setLayout(new BoxLayout(lc, BoxLayout.Y_AXIS));
+
+        JLabel ltitle = new JLabel("FRIENDRUN");
+        ltitle.setFont(new Font("Arial", Font.BOLD, 46));
+        ltitle.setForeground(Color.WHITE);
+        ltitle.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        JLabel lsub = new JLabel("Choose a version of the game to launch:");
+        lsub.setFont(new Font("Arial", Font.PLAIN, 16));
+        lsub.setForeground(new Color(200, 210, 235));
+        lsub.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        String[] versions = {
+            "Single Player Adventure",
+            "Multiplayer vs Bots",
+            "Public Multiplayer",
+            "Leaderboard",
+            "Level Editor",
+            "Weapon Shop"
+        };
+        JComboBox<String> versionBox = new JComboBox<>(versions);
+        versionBox.setFont(new Font("Arial", Font.PLAIN, 15));
+        versionBox.setMaximumSize(new Dimension(340, 32));
+        versionBox.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        JButton launchBtn = new JButton("Launch");
+        launchBtn.setFont(new Font("Arial", Font.BOLD, 16));
+        launchBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
+        launchBtn.addActionListener(e -> {
+            int sel = versionBox.getSelectedIndex();
+            switch (sel) {
+                case 0:
+                    resetSinglePlayer();
+                    layoutCards.show(rootCards, "game");
+                    paint.revalidate();
+                    singlePlaced = false;
+                    singleTimer.start();
+                    break;
+                case 1:
+                    pickRival();
+                    startMultiplayer(opponentName, opponentPoints);
+                    break;
+                case 2:
+                    String host = JOptionPane.showInputDialog(frame, "Server address:", "localhost");
+                    if (host == null) return;
+                    String portStr = JOptionPane.showInputDialog(frame, "Server port:", "4444");
+                    if (portStr == null) return;
+                    int port = 4444;
+                    try {
+                        port = Integer.parseInt(portStr.trim());
+                    } catch (Exception ignored) {
+                    }
+                    connectPublic(host.trim(), port);
+                    break;
+                case 3:
+                    refreshLeaderboard();
+                    layoutCards.show(rootCards, "leaderboard");
+                    break;
+                case 4:
+                    loadLevel();
+                    if (editorPaint != null) editorPaint.repaint();
+                    layoutCards.show(rootCards, "editor");
+                    break;
+                case 5:
+                    openWeaponShop(frame);
+                    break;
+                default:
+                    break;
+            }
+        });
+
+        JButton launchBack = new JButton("Back to Main Menu");
+        launchBack.setAlignmentX(Component.CENTER_ALIGNMENT);
+        launchBack.addActionListener(e -> layoutCards.show(rootCards, "start"));
+
+        lc.add(Box.createVerticalStrut(50));
+        lc.add(ltitle);
+        lc.add(Box.createVerticalStrut(12));
+        lc.add(lsub);
+        lc.add(Box.createVerticalStrut(28));
+        lc.add(versionBox);
+        lc.add(Box.createVerticalStrut(16));
+        lc.add(launchBtn);
+        lc.add(Box.createVerticalStrut(14));
+        lc.add(launchBack);
+        launch.add(lc, BorderLayout.CENTER);
+        rootCards.add(launch, "launch");
     }
 
     // ================= SINGLE PLAYER =================
