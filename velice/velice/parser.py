@@ -61,7 +61,7 @@ class Parser:
         return A.Block(t.line, t.col, stmts)
 
     def _param(self):
-        t = self._peek(); mut = self._match(TT.MUT)
+        t = self._peek(); mut = self._match(TT.MUT, TT.VAR)
         name = self._expect(TT.IDENT).value
         ann = None
         if self._match(TT.COLON):
@@ -81,6 +81,7 @@ class Parser:
     def _stmt(self):
         t = self._peek()
         if t.type == TT.LET: return self._let_stmt()
+        if t.type == TT.VAR: return self._var_stmt()
         if t.type == TT.CONST: return self._const_stmt()
         if t.type == TT.FN: return self._fn_decl()
         if t.type == TT.CLASS: return self._class_decl()
@@ -103,9 +104,92 @@ class Parser:
         if t.type == TT.IMPORT or t.type == TT.USE: return self._import_stmt()
         if t.type == TT.TYPE: return self._type_alias()
         if t.type == TT.MOD: return self._mod_decl()
+        # GUI DSL: `window Name { ... }` / `run Name`
+        if t.type == TT.IDENT:
+            if t.value == "window" and self._peek(1).type == TT.IDENT:
+                return self._window_decl()
+            if t.value == "run" and self._peek(1).type == TT.IDENT:
+                return self._run_stmt()
         # expression statement
         e = self._expr()
         return A.ExprStmt(e.line, e.col, e)
+
+    # ── GUI DSL ────────────────────────────────────────────────────────
+    def _window_decl(self):
+        t = self._advance()
+        name = self._expect(TT.IDENT).value
+        props = []; children = []
+        self._skip_newlines()
+        self._expect(TT.LBRACE)
+        self._skip_newlines()
+        while not self._at(TT.RBRACE, TT.EOF):
+            item = self._widget_block_item()
+            if item is None:
+                self._advance(); continue
+            if item[0] == "prop":
+                props.append((item[1], item[2]))
+            else:
+                children.append(item[1])
+            self._match(TT.SEMICOLON)
+            self._skip_newlines()
+        self._expect(TT.RBRACE)
+        return A.WindowDecl(t.line, t.col, name, props, children)
+
+    def _run_stmt(self):
+        t = self._advance()
+        name = self._expect(TT.IDENT).value
+        return A.RunStmt(t.line, t.col, name)
+
+    def _widget_block_item(self):
+        """One item inside a window/widget body.
+
+        Returns ('prop', key, value) | ('widget', WidgetNode) | None.
+        """
+        if self._at(TT.IDENT):
+            peek = self._peek(1).type
+            # property:  key = expr
+            if peek == TT.ASSIGN:
+                key = self._advance().value
+                self._advance()
+                val = self._expr()
+                return ("prop", key, val)
+            # event:  onClick { ... }
+            if peek == TT.LBRACE and self._peek().value.startswith("on"):
+                ev = self._advance().value[2:]
+                block = self._block()
+                return ("widget", A.WidgetNode(0, 0, "event", ev, None, [], [(ev, block)], []))
+            # widget child
+            return ("widget", self._widget())
+        if self._at(TT.STRING, TT.INT, TT.FLOAT):
+            return None
+        return None
+
+    def _widget(self):
+        t = self._peek()
+        wtype = self._advance().value
+        wname = None
+        if self._at(TT.IDENT, TT.STRING):
+            wname = self._advance().value
+        props = []; events = []; children = []
+        if self._at(TT.LBRACE):
+            self._advance()
+            self._skip_newlines()
+            while not self._at(TT.RBRACE, TT.EOF):
+                item = self._widget_block_item()
+                if item is None:
+                    self._advance(); continue
+                if item[0] == "prop":
+                    props.append((item[1], item[2]))
+                else:
+                    node = item[1]
+                    if node.wtype == "event":
+                        events.append((node.wname, node.children[0] if node.children else A.Block(0,0,[])))
+                    else:
+                        children.append(node)
+                self._match(TT.SEMICOLON)
+                self._skip_newlines()
+            self._expect(TT.RBRACE)
+        return A.WidgetNode(t.line, t.col, wtype, wname, props, events, children)
 
     def _let_stmt(self):
         t = self._advance(); mut = self._match(TT.MUT); name = self._expect(TT.IDENT).value
@@ -121,6 +205,19 @@ class Parser:
         if self._match(TT.COLON): ann = self._type_expr()
         self._expect(TT.ASSIGN); val = self._expr()
         return A.ConstStmt(t.line, t.col, name, ann, val)
+
+    def _var_stmt(self):
+        """`var name [: type] [= expr]` — mutable variable. When the value is a
+        parenthesized expression `var f = (expr)`, it becomes a callable thunk."""
+        t = self._advance(); name = self._expect(TT.IDENT).value
+        ann = None
+        if self._match(TT.COLON): ann = self._type_expr()
+        val = None
+        if self._match(TT.ASSIGN):
+            val = self._expr()
+            if isinstance(val, A.ParenExpr):
+                val = A.ThunkExpr(val.line, val.col, val.inner)
+        return A.LetStmt(t.line, t.col, name, ann, val, mutable=True)
 
     def _fn_decl(self):
         t = self._advance(); pub = False
@@ -551,7 +648,7 @@ class Parser:
             elems = [self._expr()]
             while self._match(TT.COMMA): elems.append(self._expr())
             self._expect(TT.RPAREN)
-            if len(elems) == 1: return elems[0]
+            if len(elems) == 1: return A.ParenExpr(t.line, t.col, elems[0])
             return A.TupleLit(t.line, t.col, elems)
         if t.type == TT.LBRACKET:
             self._advance(); elems = []

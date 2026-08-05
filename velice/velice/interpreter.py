@@ -249,6 +249,8 @@ class Interpreter:
             return r.val
 
     def eval(self, node, env):
+        if isinstance(node, A.ParenExpr): return self.eval(node.inner, env)
+        if isinstance(node, A.ThunkExpr): return self._eval_thunk(node, env)
         if isinstance(node, A.Literal):
             if isinstance(node.value, str) and "${" in node.value and node.kind == "string":
                 return self._eval_interp_str(node.value, env)
@@ -419,6 +421,10 @@ class Interpreter:
 
     def _eval_lambda(self, n, env):
         return VLFunction("<lambda>", n.params, n.body, env)
+
+    def _eval_thunk(self, n, env):
+        body = A.Block(n.line, n.col, [A.ReturnStmt(n.line, n.col, n.expr)])
+        return VLFunction("", [], body, env)
 
     def _eval_let(self, n, env):
         val = self.eval(n.value, env) if n.value else None

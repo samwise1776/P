@@ -191,11 +191,34 @@ let x = 5             # immutable
 let mut y = 5         # mutable
 y = 6                 # ok
 x = 6                 # runtime error: cannot assign to immutable binding
+var v = 7             # `var` — shorthand for a mutable binding (`let mut`)
+v = 8                 # ok
 const MAX = 100       # constant
 ```
 
-- `let` → immutable binding; `let mut` → reassignable; `const` → constant.
+- `let` → immutable binding; `let mut` → reassignable; `const` → constant; `var` → reassignable.
 - Reassigning an immutable binding raises a runtime error.
+
+### Variable code (thunks)
+
+A `var` whose initializer is a parenthesized expression holds deferred code:
+the expression is not run at declaration time, but when the variable is
+called.
+
+```velice
+var greet = (print("hello"))   # nothing prints yet
+greet()                        # hello
+
+var f = (5 * 4)
+print(f())                     # 20
+
+fn calc(var a, var b) { return a + b }   # `var` marks a mutable parameter
+```
+
+- `var f = (expr)` creates a zero-argument callable; `f()` runs `expr` and
+  returns its value.
+- Parameters may be marked `var` (or `mut`) to make them reassignable inside
+  the function body.
 
 ---
 

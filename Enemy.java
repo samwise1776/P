@@ -28,7 +28,7 @@ abstract class Enemy {
     }
 
     void gravity(int panelHeight) {
-        velY += 0.8;
+        velY += P.GRAVITY;
         y += (int) velY;
         int gY = panelHeight - 185;
         if (y >= gY) {
@@ -76,7 +76,7 @@ abstract class Enemy {
             JOptionPane.showMessageDialog(P.paint, "LEVEL UP! Level " + P.playerLevel
                     + "\nMax HP " + P.playerMaxHealth + "\nAttack x" + String.format("%.2f", P.attackMultiplier()));
         }
-        if (P.totalKills % 5 == 0 && P.chests.size() < 3) {
+        if (P.totalKills % P.CHEST_EVERY == 0 && P.chests.size() < 3) {
             int chestLevel = P.totalKills / 5;
             int cx = 60 + (int) (Math.random() * Math.max(1, P.paint.getWidth() - 160));
             int cy = P.paint.getHeight() - 185 - 30;

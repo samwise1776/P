@@ -12,10 +12,45 @@ public class P {
     static ArrayList<String> friends = new ArrayList<>();
     static ArrayList<String[]> leaderboard = new ArrayList<>();
 
-    // Th3GreatPlayer VIP: infinite steps & storage, 500 money per step.
     static boolean isVip() {
-        return playerName != null && playerName.equalsIgnoreCase("th3greatplayer");
+        return playerName != null && vipUsers.containsKey(playerName.toLowerCase());
     }
+
+    static boolean hasPerk(String perk) {
+        java.util.List<String> perks = playerName == null ? null : vipUsers.get(playerName.toLowerCase());
+        return perks != null && perks.contains(perk);
+    }
+
+    // ================= DEVELOPER MODE DATA =================
+    static final String DEV_PASSWORD = "12409";
+    static LinkedHashMap<String, java.util.List<String>> vipUsers = new LinkedHashMap<>();
+    static LinkedHashMap<String, String> vipProfiles = new LinkedHashMap<>();
+    static LinkedHashMap<String, String> emblems = new LinkedHashMap<>();
+    static HashMap<String, String> userEmblems = new HashMap<>();
+    static LinkedHashMap<String, String[]> playerRecords = new LinkedHashMap<>();
+
+    // editable game settings (Developer Mode)
+    static double GRAVITY = 0.8;
+    static int JUMP_VELOCITY = -13;
+    static int PLAYER_SPEED = 15;
+    static double playerScale = 1.0;
+    static Color SKY_TOP = new Color(135, 206, 250);
+    static Color SKY_BOTTOM = new Color(224, 244, 255);
+    static Color GROUND_TOP = new Color(110, 200, 90);
+    static Color GROUND_STRIPE = new Color(90, 170, 70);
+    static int START_MONEY = 0;
+    static int START_STEPS = 10;
+    static int DEFAULT_MONEY_MULTIPLIER = 10;
+    static int DEFAULT_MAX_MONEY_CAP = 1000;
+    static int SPAWN_X = 400;
+    static int SPAWN_Y = 300;
+    static long ENEMY_SPAWN_INTERVAL = 3000;
+    static int BOSS_WAVE_KILLS = 25;
+    static int CHEST_EVERY = 5;
+    static JPanel vipListPanel;
+
+    static int playerWidth() { return (int) Math.round(50 * playerScale); }
+    static int playerHeight() { return (int) Math.round(88 * playerScale); }
 
     // ---- navigation ----
     static CardLayout layoutCards;
@@ -41,7 +76,7 @@ public class P {
     static javax.swing.Timer singleTimer;
 
     // ---- single player combat ----
-    static final int PLAYER_MAX_HEALTH = 5000;
+    static int PLAYER_MAX_HEALTH = 5000;
     static int playerMaxHealth = PLAYER_MAX_HEALTH;
     static int playerHealth = PLAYER_MAX_HEALTH;
     static int playerLevel = 1;
@@ -66,8 +101,8 @@ public class P {
     static JPanel editorPaint;
 
     // ---- shared constants ----
-    static final int HELP_DISCOUNT = 10000;
-    static final int AREA_COST = 2000;
+    static int HELP_DISCOUNT = 10000;
+    static int AREA_COST = 2000;
     static final int[] areaX = {120, 350, 580};
     static final int areaWidth = 90;
     static boolean[] areaBought = new boolean[areaX.length];
@@ -129,6 +164,7 @@ public class P {
         buildNetPanel(frame);
         buildLeaderboard(frame);
         buildEditor(frame);
+        buildDevMode(frame);
 
         frame.add(rootCards);
         frame.setVisible(true);
@@ -168,13 +204,7 @@ public class P {
 
         JButton startBtn = new JButton("Start");
         startBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
-        startBtn.addActionListener(e -> {
-            resetSinglePlayer();
-            layoutCards.show(rootCards, "game");
-            paint.revalidate();
-            singlePlaced = false;
-            singleTimer.start();
-        });
+        startBtn.addActionListener(e -> startSingleGame());
 
         JButton weaponShopBtn = new JButton("Weapon Shop");
         weaponShopBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -325,11 +355,7 @@ public class P {
             int sel = versionBox.getSelectedIndex();
             switch (sel) {
                 case 0:
-                    resetSinglePlayer();
-                    layoutCards.show(rootCards, "game");
-                    paint.revalidate();
-                    singlePlaced = false;
-                    singleTimer.start();
+                    startSingleGame();
                     break;
                 case 1:
                     pickRival();
@@ -412,8 +438,52 @@ public class P {
         lc.add(Box.createVerticalStrut(14));
         lc.add(launchBack);
         launch.add(lc, BorderLayout.CENTER);
+
+        JPanel bottom = new JPanel(new BorderLayout());
+        bottom.setOpaque(false);
+        JPanel vipPanel = new JPanel(new BorderLayout());
+        vipPanel.setOpaque(false);
+        JLabel vipHeader = new JLabel("VIP MEMBERS");
+        vipHeader.setForeground(new Color(255, 215, 0));
+        vipHeader.setFont(new Font("Arial", Font.BOLD, 14));
+        vipHeader.setBorder(BorderFactory.createEmptyBorder(0, 14, 4, 0));
+        vipListPanel = new JPanel();
+        vipListPanel.setOpaque(false);
+        vipListPanel.setLayout(new BoxLayout(vipListPanel, BoxLayout.Y_AXIS));
+        JScrollPane vipScroll = new JScrollPane(vipListPanel);
+        vipScroll.setOpaque(false);
+        vipScroll.setBorder(null);
+        vipScroll.setPreferredSize(new Dimension(380, 110));
+        vipScroll.setMaximumSize(new Dimension(380, 110));
+        vipPanel.add(vipHeader, BorderLayout.NORTH);
+        vipPanel.add(vipScroll, BorderLayout.CENTER);
+        bottom.add(vipPanel, BorderLayout.CENTER);
+
+        JButton devBtn = new JButton("Dev");
+        devBtn.setToolTipText("Developer Mode");
+        devBtn.setFont(new Font("Arial", Font.BOLD, 10));
+        devBtn.setBackground(new Color(60, 60, 80));
+        devBtn.setForeground(new Color(180, 180, 200));
+        devBtn.setFocusPainted(false);
+        devBtn.setBorderPainted(true);
+        devBtn.addActionListener(e -> {
+            String pw = JOptionPane.showInputDialog(frame, "Enter Developer Password:");
+            if (pw == null) return;
+            if (DEV_PASSWORD.equals(pw.trim())) {
+                layoutCards.show(rootCards, "dev");
+            } else {
+                JOptionPane.showMessageDialog(frame, "Incorrect developer password.", "Access Denied", JOptionPane.ERROR_MESSAGE);
+            }
+        });
+        JPanel devWrap = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+        devWrap.setOpaque(false);
+        devWrap.add(devBtn);
+        bottom.add(devWrap, BorderLayout.EAST);
+
+        launch.add(bottom, BorderLayout.SOUTH);
         rootCards.add(launch, "launch");
 
+        refreshVipList();
         buildDocuments(frame);
     }
 
@@ -729,7 +799,7 @@ public class P {
         am.put("jump", new AbstractAction() {
             public void actionPerformed(ActionEvent e) {
                 if (onGround && jumpsLeft > 0) {
-                    velY = -13;
+                    velY = JUMP_VELOCITY;
                     onGround = false;
                     jumpsLeft--;
                     steps += 2;
@@ -739,13 +809,13 @@ public class P {
 
         am.put("left", new AbstractAction() {
             public void actionPerformed(ActionEvent e) {
-                move(-15, paint);
+                move(-PLAYER_SPEED, paint);
             }
         });
 
         am.put("right", new AbstractAction() {
             public void actionPerformed(ActionEvent e) {
-                move(15, paint);
+                move(PLAYER_SPEED, paint);
             }
         });
 
@@ -763,13 +833,13 @@ public class P {
                     singlePlaced = true;
                 }
             }
-            velY += 0.8;
+            velY += GRAVITY;
             circleY += (int) velY;
             boolean onBlock = false;
             if (velY >= 0) {
                 for (Block b : blocks) {
-                    if (horizOverlap(b) && circleY + 85 >= b.y && circleY + 85 <= b.y + (int) velY + 2) {
-                        circleY = b.y - 85;
+                    if (horizOverlap(b) && circleY + playerHeight() >= b.y && circleY + playerHeight() <= b.y + (int) velY + 2) {
+                        circleY = b.y - playerHeight();
                         velY = 0;
                         onBlock = true;
                         break;
@@ -792,12 +862,12 @@ public class P {
             } else if (onBlock) {
                 onGround = true;
             }
-            circleX = clamp(circleX, 0, paint.getWidth() - 50);
+            circleX = clamp(circleX, 0, paint.getWidth() - playerWidth());
 
             // ---- combat update ----
             long now = System.currentTimeMillis();
             if (!gameOver) {
-                if (!bossAlive && kills >= 25 * (bossWaves + 1)) {
+                if (!bossAlive && kills >= BOSS_WAVE_KILLS * (bossWaves + 1)) {
                     bossAlive = true;
                     bossWaves++;
                     Boss b = new Boss(paint.getWidth() / 2);
@@ -806,7 +876,7 @@ public class P {
                     enemies.add(b);
                     bossMessageUntil = now + 2500;
                 }
-                if (!bossAlive && enemies.size() < 6 && now - lastSpawnMs > 3000) {
+                if (!bossAlive && enemies.size() < 6 && now - lastSpawnMs > ENEMY_SPAWN_INTERVAL) {
                     lastSpawnMs = now;
                     int ex = Math.random() < 0.5 ? -40 : paint.getWidth();
                     Enemy en = Math.random() < 0.4 ? new RangedEnemy(ex) : new MeleeEnemy(ex);
@@ -826,15 +896,15 @@ public class P {
     }
 
     static void resetSinglePlayer() {
-        circleX = 400;
-        circleY = 300;
-        steps = isVip() ? Integer.MAX_VALUE : 10;
-        money = 0;
+        circleX = SPAWN_X;
+        circleY = SPAWN_Y;
+        steps = (isVip() || hasPerk("Infinite Steps")) ? Integer.MAX_VALUE : START_STEPS;
+        money = START_MONEY;
         stepCost = 10;
         maxMoneyCost = 25;
         multiplierCost = 25;
-        moneyMultiplier = isVip() ? Integer.MAX_VALUE - 10 : 10;
-        maxMoneyCap = isVip() ? Integer.MAX_VALUE : 1000;
+        moneyMultiplier = (isVip() || hasPerk("Double Money")) ? Integer.MAX_VALUE - 10 : DEFAULT_MONEY_MULTIPLIER;
+        maxMoneyCap = isVip() ? Integer.MAX_VALUE : DEFAULT_MAX_MONEY_CAP;
         velY = 0;
         onGround = false;
         jumpsLeft = 50;
@@ -862,13 +932,13 @@ public class P {
     private static void move(int dx, JPanel panel) {
         if (steps <= 0) return;
 
-        circleX = clamp(circleX + dx, 0, panel.getWidth() - 50);
+        circleX = clamp(circleX + dx, 0, panel.getWidth() - playerWidth());
         if (dx != 0) facing = dx > 0 ? 1 : -1;
 
         for (Block b : blocks) {
             if (!vertOverlap(b)) continue;
-            if (dx > 0 && circleX + 45 > b.x && circleX + 45 < b.x + b.w + Math.abs(dx) + 2) {
-                circleX = b.x - 45;
+            if (dx > 0 && circleX + playerWidth() > b.x && circleX + playerWidth() < b.x + b.w + Math.abs(dx) + 2) {
+                circleX = b.x - playerWidth();
                 break;
             }
             if (dx < 0 && circleX < b.x + b.w && circleX > b.x - Math.abs(dx) - 2) {
@@ -999,10 +1069,10 @@ public class P {
             }
 
             applyGravity(local, multiPaint.getHeight());
-            local.x = clamp(local.x, 0, multiPaint.getWidth() - 50);
+            local.x = clamp(local.x, 0, multiPaint.getWidth() - playerWidth());
             for (PlayerState b : bots) {
                 applyGravity(b, multiPaint.getHeight());
-                b.x = clamp(b.x, 0, multiPaint.getWidth() - 50);
+                b.x = clamp(b.x, 0, multiPaint.getWidth() - playerWidth());
             }
 
             // bot AI
@@ -1190,7 +1260,7 @@ public class P {
             }
 
             applyGravity(local, netPaint.getHeight());
-            local.x = clamp(local.x, 0, netPaint.getWidth() - 50);
+            local.x = clamp(local.x, 0, netPaint.getWidth() - playerWidth());
 
             if (!netRemoteSeen) {
                 int g = netPaint.getHeight() - 185;
@@ -1357,7 +1427,10 @@ public class P {
         sb.append("----  ----                 ------\n");
         int rank = 1;
         for (String[] e : sorted) {
-            sb.append(String.format("%-5d %-20s %d%n", rank, e[0], Integer.parseInt(e[1])));
+            String sym = "";
+            String ue = userEmblems.get(e[0].toLowerCase());
+            if (ue != null && emblems.containsKey(ue)) sym = emblems.get(ue) + " ";
+            sb.append(String.format("%-5d %s%-20s %d%n", rank, sym, e[0], Integer.parseInt(e[1])));
             rank++;
         }
         leaderboardArea.setText(sb.toString());
@@ -1365,7 +1438,7 @@ public class P {
 
     // ================= DRAWING HELPERS =================
     static void drawBackground(Graphics2D g2d, int w, int h) {
-        GradientPaint sky = new GradientPaint(0, 0, new Color(135, 206, 250), 0, h, new Color(224, 244, 255));
+        GradientPaint sky = new GradientPaint(0, 0, SKY_TOP, 0, h, SKY_BOTTOM);
         g2d.setPaint(sky);
         g2d.fillRect(0, 0, w, h);
 
@@ -1381,13 +1454,19 @@ public class P {
         g2d.fillOval(320, 70, 60, 28);
         g2d.fillOval(350, 58, 55, 36);
 
-        g2d.setColor(new Color(110, 200, 90));
+        g2d.setColor(GROUND_TOP);
         g2d.fillRect(0, h - 100, w, 100);
-        g2d.setColor(new Color(90, 170, 70));
+        g2d.setColor(GROUND_STRIPE);
         g2d.fillRect(0, h - 12, w, 12);
     }
 
     static void drawCharacter(Graphics2D g2d, int x, int y, Color shirtColor) {
+        java.awt.geom.AffineTransform old = g2d.getTransform();
+        if (playerScale != 1.0) {
+            g2d.translate(x, y);
+            g2d.scale(playerScale, playerScale);
+            g2d.translate(-x, -y);
+        }
         Color skinColor = new Color(245, 200, 170);
         Color hairColor = new Color(70, 50, 40);
         Color pantsColor = new Color(50, 50, 60);
@@ -1422,6 +1501,7 @@ public class P {
         g2d.fillOval(x + 16, y - 4, 3, 3);
         g2d.fillOval(x + 25, y - 4, 3, 3);
         g2d.drawArc(x + 18, y + 1, 8, 5, 0, -180);
+        g2d.setTransform(old);
     }
 
     // ================= GAME LOGIC HELPERS =================
@@ -1430,7 +1510,7 @@ public class P {
     }
 
     static boolean inArea(int i) {
-        return circleX + 45 > areaX[i] && circleX < areaX[i] + areaWidth;
+        return circleX + playerWidth() > areaX[i] && circleX < areaX[i] + areaWidth;
     }
 
     static boolean inBoostArea() {
@@ -1444,7 +1524,7 @@ public class P {
 
     static boolean inZone(int x) {
         for (int i = 0; i < areaX.length; i++) {
-            if (x + 45 > areaX[i] && x < areaX[i] + areaWidth) {
+            if (x + playerWidth() > areaX[i] && x < areaX[i] + areaWidth) {
                 return true;
             }
         }
@@ -1454,7 +1534,7 @@ public class P {
     // ================= PLAYER STATE & MULTIPLAYER HELPERS =================
 
     static void applyGravity(PlayerState ps, int panelHeight) {
-        ps.velY += 0.8;
+        ps.velY += GRAVITY;
         ps.y += (int) ps.velY;
         int gY = panelHeight - 185;
         if (ps.y >= gY) {
@@ -1466,7 +1546,7 @@ public class P {
 
     static void movePlayer(PlayerState ps, int dx, int panelWidth) {
         if (ps.steps <= 0) return;
-        ps.x = clamp(ps.x + dx, 0, panelWidth - 50);
+        ps.x = clamp(ps.x + dx, 0, panelWidth - playerWidth());
         ps.steps--;
         if (ps.money < ps.maxMoneyCap) {
             int gain = ps.moneyMultiplier * (ownsZone(ps, ps.x) ? 2 : 1);
@@ -1476,7 +1556,7 @@ public class P {
 
     static void jumpPlayer(PlayerState ps) {
         if (ps.onGround && ps.jumpsLeft > 0) {
-            ps.velY = -13;
+            ps.velY = JUMP_VELOCITY;
             ps.onGround = false;
             ps.jumpsLeft--;
             ps.steps += 2;
@@ -1484,7 +1564,7 @@ public class P {
     }
 
     static boolean inZoneAt(int x, int i) {
-        return x + 45 > areaX[i] && x < areaX[i] + areaWidth;
+        return x + playerWidth() > areaX[i] && x < areaX[i] + areaWidth;
     }
 
     static boolean ownsZone(PlayerState ps, int x) {
@@ -1957,11 +2037,11 @@ public class P {
     }
 
     static boolean horizOverlap(Block b) {
-        return circleX + 45 > b.x && circleX < b.x + b.w;
+        return circleX + playerWidth() > b.x && circleX < b.x + b.w;
     }
 
     static boolean vertOverlap(Block b) {
-        return circleY + 85 > b.y && circleY < b.y + b.h;
+        return circleY + playerHeight() > b.y && circleY < b.y + b.h;
     }
 
     // ================= LEVEL EDITOR =================
@@ -2082,7 +2162,7 @@ public class P {
         }
         g2d.setColor(Color.BLACK);
         g2d.drawString("Level " + playerLevel + " | Next lvl in " + (requiredKills(playerLevel) - levelKills) + " kills | Atk x" + String.format("%.2f", attackMultiplier()), 20, wy + 4);
-        g2d.drawString("Kills: " + kills + " | Boss in " + (25 * (bossWaves + 1) - kills) + " | Chest in " + (5 - totalKills % 5) + " | Q/E to switch", 20, wy + 22);
+        g2d.drawString("Kills: " + kills + " | Boss in " + (BOSS_WAVE_KILLS * (bossWaves + 1) - kills) + " | Chest in " + (CHEST_EVERY - totalKills % CHEST_EVERY) + " | Q/E to switch", 20, wy + 22);
         if (steps <= 0) {
             g2d.setColor(Color.RED);
             g2d.drawString("OUT OF STEPS! Buy more below.", 20, wy + 44);
@@ -2214,6 +2294,9 @@ public class P {
 
     // ================= PERSISTENCE =================
     static void loadData() {
+        loadDevData();
+        leaderboard.clear();
+        friends.clear();
         try {
             BufferedReader br = new BufferedReader(new FileReader("friendrun_player.txt"));
             String line = br.readLine();
@@ -2308,6 +2391,7 @@ public class P {
             w.close();
         } catch (Exception ignored) {
         }
+        saveDevData();
     }
 
     static void setPoints(String name, int pts) {
@@ -2321,11 +2405,890 @@ public class P {
     }
 
     static int getPointsOf(String name) {
+        if (name == null) return 0;
         for (String[] e : leaderboard) {
-            if (e[0].equals(name)) {
+            if (e[0].equalsIgnoreCase(name)) {
                 return Integer.parseInt(e[1]);
             }
         }
         return 0;
+    }
+
+    // ================= DEVELOPER MODE =================
+    static int parseInt(String s, int dflt) {
+        try {
+            return Integer.parseInt(s.trim());
+        } catch (Exception e) {
+            return dflt;
+        }
+    }
+
+    static double parseDouble(String s, double dflt) {
+        try {
+            return Double.parseDouble(s.trim());
+        } catch (Exception e) {
+            return dflt;
+        }
+    }
+
+    static Color parseColor(String s, Color dflt) {
+        try {
+            String[] p = s.split(",");
+            return new Color(Integer.parseInt(p[0].trim()), Integer.parseInt(p[1].trim()), Integer.parseInt(p[2].trim()));
+        } catch (Exception e) {
+            return dflt;
+        }
+    }
+
+    static java.util.List<String> parsePerks(String s) {
+        java.util.List<String> out = new ArrayList<>();
+        for (String p : s.split(",")) {
+            String t = p.trim();
+            if (!t.isEmpty() && !out.contains(t)) out.add(t);
+        }
+        return out;
+    }
+
+    static void loadDevData() {
+        vipUsers.clear();
+        emblems.clear();
+        userEmblems.clear();
+        vipProfiles.clear();
+        playerRecords.clear();
+        vipUsers.put("th3greatplayer", new ArrayList<>(Arrays.asList("Infinite Steps", "Double Money")));
+        emblems.put("Gold", "★");
+        userEmblems.put("th3greatplayer", "Gold");
+        try {
+            BufferedReader br = new BufferedReader(new FileReader("friendrun_vips.txt"));
+            String line;
+            while ((line = br.readLine()) != null) {
+                if (line.trim().isEmpty()) continue;
+                String[] p = line.split("\\|");
+                java.util.List<String> perks = new ArrayList<>();
+                if (p.length > 1 && !p[1].trim().isEmpty()) perks.addAll(parsePerks(p[1]));
+                vipUsers.put(p[0].trim().toLowerCase(), perks);
+            }
+            br.close();
+        } catch (Exception ignored) {
+        }
+        try {
+            BufferedReader br = new BufferedReader(new FileReader("friendrun_vip_profiles.txt"));
+            String line;
+            while ((line = br.readLine()) != null) {
+                String[] p = line.split("\\|");
+                if (p.length == 2) vipProfiles.put(p[0].trim(), p[1].trim());
+            }
+            br.close();
+        } catch (Exception ignored) {
+        }
+        try {
+            BufferedReader br = new BufferedReader(new FileReader("friendrun_emblems.txt"));
+            String line;
+            while ((line = br.readLine()) != null) {
+                String[] p = line.split("\\|");
+                if (p.length == 2) emblems.put(p[0].trim(), p[1].trim());
+            }
+            br.close();
+        } catch (Exception ignored) {
+        }
+        try {
+            BufferedReader br = new BufferedReader(new FileReader("friendrun_user_emblems.txt"));
+            String line;
+            while ((line = br.readLine()) != null) {
+                String[] p = line.split("\\|");
+                if (p.length == 2) userEmblems.put(p[0].trim().toLowerCase(), p[1].trim());
+            }
+            br.close();
+        } catch (Exception ignored) {
+        }
+        try {
+            BufferedReader br = new BufferedReader(new FileReader("friendrun_player_records.txt"));
+            String line;
+            while ((line = br.readLine()) != null) {
+                String[] p = line.split("\\|", -1);
+                if (p.length >= 14) {
+                    playerRecords.put(p[0].trim().toLowerCase(), Arrays.copyOf(p, 14));
+                }
+            }
+            br.close();
+        } catch (Exception ignored) {
+        }
+        try {
+            BufferedReader br = new BufferedReader(new FileReader("friendrun_settings.txt"));
+            String line;
+            while ((line = br.readLine()) != null) {
+                String[] kv = line.split("=", 2);
+                if (kv.length != 2) continue;
+                String k = kv[0].trim();
+                String v = kv[1].trim();
+                switch (k) {
+                    case "gravity": GRAVITY = parseDouble(v, GRAVITY); break;
+                    case "jump": JUMP_VELOCITY = parseInt(v, JUMP_VELOCITY); break;
+                    case "speed": PLAYER_SPEED = parseInt(v, PLAYER_SPEED); break;
+                    case "scale": playerScale = parseDouble(v, playerScale); break;
+                    case "skyTop": SKY_TOP = parseColor(v, SKY_TOP); break;
+                    case "skyBottom": SKY_BOTTOM = parseColor(v, SKY_BOTTOM); break;
+                    case "groundTop": GROUND_TOP = parseColor(v, GROUND_TOP); break;
+                    case "groundStripe": GROUND_STRIPE = parseColor(v, GROUND_STRIPE); break;
+                    case "maxHealth": PLAYER_MAX_HEALTH = parseInt(v, PLAYER_MAX_HEALTH); break;
+                    case "startMoney": START_MONEY = parseInt(v, START_MONEY); break;
+                    case "startSteps": START_STEPS = parseInt(v, START_STEPS); break;
+                    case "areaCost": AREA_COST = parseInt(v, AREA_COST); break;
+                    case "helpDiscount": HELP_DISCOUNT = parseInt(v, HELP_DISCOUNT); break;
+                    case "moneyMultiplier": DEFAULT_MONEY_MULTIPLIER = parseInt(v, DEFAULT_MONEY_MULTIPLIER); break;
+                    case "moneyCap": DEFAULT_MAX_MONEY_CAP = parseInt(v, DEFAULT_MAX_MONEY_CAP); break;
+                    case "spawnX": SPAWN_X = parseInt(v, SPAWN_X); break;
+                    case "spawnY": SPAWN_Y = parseInt(v, SPAWN_Y); break;
+                    case "spawnInterval": ENEMY_SPAWN_INTERVAL = parseInt(v, (int) ENEMY_SPAWN_INTERVAL); break;
+                    case "bossWave": BOSS_WAVE_KILLS = parseInt(v, BOSS_WAVE_KILLS); break;
+                    case "chestEvery": CHEST_EVERY = parseInt(v, CHEST_EVERY); break;
+                }
+            }
+            br.close();
+        } catch (Exception ignored) {
+        }
+    }
+
+    static void saveDevData() {
+        try {
+            PrintWriter w = new PrintWriter(new FileWriter("friendrun_vips.txt"));
+            for (Map.Entry<String, java.util.List<String>> e : vipUsers.entrySet()) {
+                w.println(e.getKey() + "|" + String.join(",", e.getValue()));
+            }
+            w.close();
+        } catch (Exception ignored) {
+        }
+        try {
+            PrintWriter w = new PrintWriter(new FileWriter("friendrun_vip_profiles.txt"));
+            for (Map.Entry<String, String> e : vipProfiles.entrySet()) {
+                w.println(e.getKey() + "|" + e.getValue());
+            }
+            w.close();
+        } catch (Exception ignored) {
+        }
+        try {
+            PrintWriter w = new PrintWriter(new FileWriter("friendrun_emblems.txt"));
+            for (Map.Entry<String, String> e : emblems.entrySet()) {
+                w.println(e.getKey() + "|" + e.getValue());
+            }
+            w.close();
+        } catch (Exception ignored) {
+        }
+        try {
+            PrintWriter w = new PrintWriter(new FileWriter("friendrun_user_emblems.txt"));
+            for (Map.Entry<String, String> e : userEmblems.entrySet()) {
+                w.println(e.getKey() + "|" + e.getValue());
+            }
+            w.close();
+        } catch (Exception ignored) {
+        }
+        try {
+            PrintWriter w = new PrintWriter(new FileWriter("friendrun_player_records.txt"));
+            for (Map.Entry<String, String[]> e : playerRecords.entrySet()) {
+                w.println(String.join("|", e.getValue()));
+            }
+            w.close();
+        } catch (Exception ignored) {
+        }
+        try {
+            PrintWriter w = new PrintWriter(new FileWriter("friendrun_settings.txt"));
+            w.println("gravity=" + GRAVITY);
+            w.println("jump=" + JUMP_VELOCITY);
+            w.println("speed=" + PLAYER_SPEED);
+            w.println("scale=" + playerScale);
+            w.println("skyTop=" + SKY_TOP.getRed() + "," + SKY_TOP.getGreen() + "," + SKY_TOP.getBlue());
+            w.println("skyBottom=" + SKY_BOTTOM.getRed() + "," + SKY_BOTTOM.getGreen() + "," + SKY_BOTTOM.getBlue());
+            w.println("groundTop=" + GROUND_TOP.getRed() + "," + GROUND_TOP.getGreen() + "," + GROUND_TOP.getBlue());
+            w.println("groundStripe=" + GROUND_STRIPE.getRed() + "," + GROUND_STRIPE.getGreen() + "," + GROUND_STRIPE.getBlue());
+            w.println("maxHealth=" + PLAYER_MAX_HEALTH);
+            w.println("startMoney=" + START_MONEY);
+            w.println("startSteps=" + START_STEPS);
+            w.println("areaCost=" + AREA_COST);
+            w.println("helpDiscount=" + HELP_DISCOUNT);
+            w.println("moneyMultiplier=" + DEFAULT_MONEY_MULTIPLIER);
+            w.println("moneyCap=" + DEFAULT_MAX_MONEY_CAP);
+            w.println("spawnX=" + SPAWN_X);
+            w.println("spawnY=" + SPAWN_Y);
+            w.println("spawnInterval=" + ENEMY_SPAWN_INTERVAL);
+            w.println("bossWave=" + BOSS_WAVE_KILLS);
+            w.println("chestEvery=" + CHEST_EVERY);
+            w.close();
+        } catch (Exception ignored) {
+        }
+    }
+
+    static void applyPlayerRecord(String name) {
+        if (name == null) return;
+        String[] r = playerRecords.get(name.toLowerCase());
+        if (r == null) return;
+        playerPoints = parseInt(r[1], playerPoints);
+        money = parseInt(r[2], money);
+        int st = parseInt(r[3], -1);
+        steps = st < 0 ? Integer.MAX_VALUE : st;
+        playerLevel = parseInt(r[4], playerLevel);
+        levelKills = parseInt(r[5], levelKills);
+        totalKills = parseInt(r[6], totalKills);
+        playerMaxHealth = parseInt(r[7], PLAYER_MAX_HEALTH);
+        playerHealth = parseInt(r[8], playerMaxHealth);
+        moneyMultiplier = parseInt(r[9], moneyMultiplier);
+        maxMoneyCap = parseInt(r[10], maxMoneyCap);
+        kills = parseInt(r[11], kills);
+        String inv = r[12] == null ? "" : r[12].trim();
+        if (!inv.isEmpty()) {
+            ArrayList<Weapon> list = new ArrayList<>();
+            for (String wn : inv.split(",")) {
+                Weapon w = weaponByName(wn.trim(), 0);
+                if (w != null && !list.stream().anyMatch(ow -> ow.name.equalsIgnoreCase(w.name))) list.add(w);
+            }
+            if (!list.isEmpty()) {
+                ownedWeapons = list;
+                currentWeapon = ownedWeapons.get(0);
+                equippedWeapon = currentWeapon;
+            }
+        }
+    }
+
+    static void startSingleGame() {
+        resetSinglePlayer();
+        applyPlayerRecord(playerName);
+        layoutCards.show(rootCards, "game");
+        paint.revalidate();
+        singlePlaced = false;
+        singleTimer.start();
+    }
+
+    static void startGameAs(String name) {
+        playerName = name;
+        startSingleGame();
+        startPointsLabel.setText("Points: " + playerPoints);
+    }
+
+    static void refreshVipList() {
+        if (vipListPanel == null) return;
+        vipListPanel.removeAll();
+        for (Map.Entry<String, java.util.List<String>> e : vipUsers.entrySet()) {
+            String nm = e.getKey();
+            String display = nm;
+            String ue = userEmblems.get(nm);
+            if (ue != null && emblems.containsKey(ue)) display = emblems.get(ue) + " " + nm;
+            JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 2));
+            row.setOpaque(false);
+            JLabel lbl = new JLabel("⭐ " + display + "   [" + String.join(", ", e.getValue()) + "]");
+            lbl.setForeground(new Color(255, 225, 120));
+            lbl.setFont(new Font("Arial", Font.BOLD, 13));
+            JButton start = new JButton("Start");
+            start.addActionListener(ev -> startGameAs(nm));
+            row.add(lbl);
+            row.add(start);
+            vipListPanel.add(row);
+        }
+        vipListPanel.revalidate();
+        vipListPanel.repaint();
+    }
+
+    static JButton colorButton(Color c) {
+        JButton b = new JButton("Pick Color");
+        b.setBackground(c);
+        b.setOpaque(true);
+        b.addActionListener(e -> {
+            Color nc = JColorChooser.showDialog(b, "Choose Color", b.getBackground());
+            if (nc != null) b.setBackground(nc);
+        });
+        return b;
+    }
+
+    static void buildDevMode(JFrame frame) {
+        JPanel p = new JPanel(new BorderLayout());
+        p.setBackground(new Color(28, 30, 42));
+
+        JPanel header = new JPanel(new BorderLayout());
+        header.setBackground(new Color(34, 37, 52));
+        JLabel h = new JLabel("  DEVELOPER MODE");
+        h.setFont(new Font("Arial", Font.BOLD, 22));
+        h.setForeground(new Color(120, 220, 160));
+        JButton back = new JButton("Back");
+        back.addActionListener(e -> layoutCards.show(rootCards, "launch"));
+        header.add(h, BorderLayout.CENTER);
+        header.add(back, BorderLayout.EAST);
+
+        JTabbedPane tabs = new JTabbedPane();
+        tabs.addTab("Player Editor", buildPlayerEditor(frame));
+        tabs.addTab("Game Settings", buildGameSettings(frame));
+        tabs.addTab("VIP Management", buildVipManagement(frame));
+        tabs.addTab("Emblems", buildEmblems(frame));
+        tabs.addTab("Save System", buildSaveSystem(frame));
+
+        p.add(header, BorderLayout.NORTH);
+        p.add(tabs, BorderLayout.CENTER);
+        rootCards.add(p, "dev");
+    }
+
+    static JPanel buildPlayerEditor(JFrame frame) {
+        JPanel root = new JPanel(new BorderLayout(10, 10));
+        root.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
+        root.setBackground(new Color(38, 41, 58));
+
+        JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
+        top.setOpaque(false);
+        JTextField search = new JTextField(16);
+        JButton searchBtn = new JButton("Search / New");
+        top.add(new JLabel("Username:"));
+        top.add(search);
+        top.add(searchBtn);
+
+        JPanel form = new JPanel(new GridLayout(0, 2, 8, 6));
+        form.setOpaque(false);
+        JTextField fName = new JTextField();
+        JTextField fPoints = new JTextField();
+        JTextField fMoney = new JTextField();
+        JTextField fSteps = new JTextField();
+        JTextField fLevel = new JTextField();
+        JTextField fLevelKills = new JTextField();
+        JTextField fTotalKills = new JTextField();
+        JTextField fMaxHealth = new JTextField();
+        JTextField fHealth = new JTextField();
+        JTextField fMultiplier = new JTextField();
+        JTextField fCap = new JTextField();
+        JTextField fKills = new JTextField();
+        JTextField fInventory = new JTextField();
+        JCheckBox fVip = new JCheckBox("VIP Member");
+        JTextField fPerks = new JTextField();
+        JComboBox<String> fEmblem = new JComboBox<>();
+        fVip.setOpaque(false);
+        form.add(new JLabel("Name")); form.add(fName);
+        form.add(new JLabel("Score / Points")); form.add(fPoints);
+        form.add(new JLabel("Money")); form.add(fMoney);
+        form.add(new JLabel("Steps (-1 = infinite)")); form.add(fSteps);
+        form.add(new JLabel("Level")); form.add(fLevel);
+        form.add(new JLabel("Level Kills")); form.add(fLevelKills);
+        form.add(new JLabel("Total Kills")); form.add(fTotalKills);
+        form.add(new JLabel("Max Health")); form.add(fMaxHealth);
+        form.add(new JLabel("Health")); form.add(fHealth);
+        form.add(new JLabel("Money Multiplier")); form.add(fMultiplier);
+        form.add(new JLabel("Money Cap")); form.add(fCap);
+        form.add(new JLabel("Kills This Run")); form.add(fKills);
+        form.add(new JLabel("Inventory (weapon names, comma)")); form.add(fInventory);
+        form.add(fVip); form.add(new JLabel(""));
+        form.add(new JLabel("Perks (comma)")); form.add(fPerks);
+        form.add(new JLabel("Emblem")); form.add(fEmblem);
+
+        JButton applyBtn = new JButton("Apply Changes");
+        JButton saveBtn = new JButton("Save Changes");
+        JButton resetBtn = new JButton("Reset Player");
+        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
+        buttons.setOpaque(false);
+        buttons.add(applyBtn);
+        buttons.add(saveBtn);
+        buttons.add(resetBtn);
+
+        searchBtn.addActionListener(e -> {
+            String nm = search.getText().trim();
+            if (nm.isEmpty()) return;
+            String key = nm.toLowerCase();
+            String[] r = playerRecords.get(key);
+            if (r == null) {
+                r = new String[]{nm, "0", "0", "-1", "1", "0", "0", "" + PLAYER_MAX_HEALTH, "" + PLAYER_MAX_HEALTH,
+                        "" + DEFAULT_MONEY_MULTIPLIER, "" + DEFAULT_MAX_MONEY_CAP, "0", "", ""};
+            }
+            fName.setText(r[0]);
+            fPoints.setText(r[1]);
+            fMoney.setText(r[2]);
+            fSteps.setText(r[3]);
+            fLevel.setText(r[4]);
+            fLevelKills.setText(r[5]);
+            fTotalKills.setText(r[6]);
+            fMaxHealth.setText(r[7]);
+            fHealth.setText(r[8]);
+            fMultiplier.setText(r[9]);
+            fCap.setText(r[10]);
+            fKills.setText(r[11]);
+            fInventory.setText(r[12]);
+            java.util.List<String> perks = vipUsers.get(key);
+            fVip.setSelected(perks != null);
+            fPerks.setText(perks == null ? "" : String.join(",", perks));
+            fEmblem.removeAllItems();
+            fEmblem.addItem("(none)");
+            for (String em : emblems.keySet()) fEmblem.addItem(em);
+            String assigned = userEmblems.get(key);
+            if (assigned != null && emblems.containsKey(assigned)) fEmblem.setSelectedItem(assigned);
+        });
+
+        applyBtn.addActionListener(e -> {
+            String nm = fName.getText().trim();
+            if (nm.isEmpty()) return;
+            String key = nm.toLowerCase();
+            String[] r = new String[]{nm, fPoints.getText().trim(), fMoney.getText().trim(), fSteps.getText().trim(),
+                    fLevel.getText().trim(), fLevelKills.getText().trim(), fTotalKills.getText().trim(),
+                    fMaxHealth.getText().trim(), fHealth.getText().trim(), fMultiplier.getText().trim(),
+                    fCap.getText().trim(), fKills.getText().trim(), fInventory.getText().trim(), ""};
+            playerRecords.put(key, r);
+            java.util.List<String> perks = parsePerks(fPerks.getText());
+            if (fVip.isSelected()) vipUsers.put(key, perks);
+            else vipUsers.remove(key);
+            String sel = (String) fEmblem.getSelectedItem();
+            if (sel == null || sel.equals("(none)")) userEmblems.remove(key);
+            else userEmblems.put(key, sel);
+            saveDevData();
+            if (playerName != null && playerName.equalsIgnoreCase(nm)) {
+                applyPlayerRecord(playerName);
+                if (paint != null) paint.repaint();
+                startPointsLabel.setText("Points: " + playerPoints);
+            }
+            refreshVipList();
+            JOptionPane.showMessageDialog(frame, "Applied changes for " + nm + ".");
+        });
+
+        saveBtn.addActionListener(e -> {
+            String nm = fName.getText().trim();
+            if (nm.isEmpty()) return;
+            String key = nm.toLowerCase();
+            String[] r = new String[]{nm, fPoints.getText().trim(), fMoney.getText().trim(), fSteps.getText().trim(),
+                    fLevel.getText().trim(), fLevelKills.getText().trim(), fTotalKills.getText().trim(),
+                    fMaxHealth.getText().trim(), fHealth.getText().trim(), fMultiplier.getText().trim(),
+                    fCap.getText().trim(), fKills.getText().trim(), fInventory.getText().trim(), ""};
+            playerRecords.put(key, r);
+            java.util.List<String> perks = parsePerks(fPerks.getText());
+            if (fVip.isSelected()) vipUsers.put(key, perks);
+            else vipUsers.remove(key);
+            String sel = (String) fEmblem.getSelectedItem();
+            if (sel == null || sel.equals("(none)")) userEmblems.remove(key);
+            else userEmblems.put(key, sel);
+            saveDevData();
+            refreshVipList();
+            JOptionPane.showMessageDialog(frame, "Saved " + nm + ".");
+        });
+
+        resetBtn.addActionListener(e -> {
+            String nm = fName.getText().trim();
+            if (nm.isEmpty()) return;
+            playerRecords.remove(nm.toLowerCase());
+            if (playerName != null && playerName.equalsIgnoreCase(nm)) {
+                resetSinglePlayer();
+                startPointsLabel.setText("Points: " + playerPoints);
+                if (paint != null) paint.repaint();
+            }
+            saveDevData();
+            JOptionPane.showMessageDialog(frame, nm + " reset to defaults.");
+        });
+
+        root.add(top, BorderLayout.NORTH);
+        root.add(form, BorderLayout.CENTER);
+        root.add(buttons, BorderLayout.SOUTH);
+        return root;
+    }
+
+    static JPanel buildGameSettings(JFrame frame) {
+        JPanel root = new JPanel(new BorderLayout(10, 10));
+        root.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
+        root.setBackground(new Color(38, 41, 58));
+        JPanel form = new JPanel(new GridLayout(0, 2, 8, 6));
+        form.setOpaque(false);
+
+        JTextField fGravity = new JTextField("" + GRAVITY);
+        JTextField fJump = new JTextField("" + JUMP_VELOCITY);
+        JTextField fSpeed = new JTextField("" + PLAYER_SPEED);
+        JTextField fScale = new JTextField("" + playerScale);
+        JTextField fMaxHealth = new JTextField("" + PLAYER_MAX_HEALTH);
+        JTextField fAreaCost = new JTextField("" + AREA_COST);
+        JTextField fHelpDiscount = new JTextField("" + HELP_DISCOUNT);
+        JTextField fStartMoney = new JTextField("" + START_MONEY);
+        JTextField fStartSteps = new JTextField("" + START_STEPS);
+        JTextField fMultiplier = new JTextField("" + DEFAULT_MONEY_MULTIPLIER);
+        JTextField fCap = new JTextField("" + DEFAULT_MAX_MONEY_CAP);
+        JTextField fSpawnX = new JTextField("" + SPAWN_X);
+        JTextField fSpawnY = new JTextField("" + SPAWN_Y);
+        JTextField fSpawnInterval = new JTextField("" + ENEMY_SPAWN_INTERVAL);
+        JTextField fBossWave = new JTextField("" + BOSS_WAVE_KILLS);
+        JTextField fChestEvery = new JTextField("" + CHEST_EVERY);
+        JButton skyTopBtn = colorButton(SKY_TOP);
+        JButton skyBottomBtn = colorButton(SKY_BOTTOM);
+        JButton groundTopBtn = colorButton(GROUND_TOP);
+        JButton groundStripeBtn = colorButton(GROUND_STRIPE);
+
+        form.add(new JLabel("Gravity")); form.add(fGravity);
+        form.add(new JLabel("Jump Height (negative = up)")); form.add(fJump);
+        form.add(new JLabel("Player Speed")); form.add(fSpeed);
+        form.add(new JLabel("Player Size %")); form.add(fScale);
+        form.add(new JLabel("Max Health")); form.add(fMaxHealth);
+        form.add(new JLabel("Area Cost")); form.add(fAreaCost);
+        form.add(new JLabel("Help / Shield Discount")); form.add(fHelpDiscount);
+        form.add(new JLabel("Start Money")); form.add(fStartMoney);
+        form.add(new JLabel("Start Steps")); form.add(fStartSteps);
+        form.add(new JLabel("Money Multiplier")); form.add(fMultiplier);
+        form.add(new JLabel("Money Cap")); form.add(fCap);
+        form.add(new JLabel("Spawn X")); form.add(fSpawnX);
+        form.add(new JLabel("Spawn Y")); form.add(fSpawnY);
+        form.add(new JLabel("Enemy Spawn Interval (ms)")); form.add(fSpawnInterval);
+        form.add(new JLabel("Boss Every (kills)")); form.add(fBossWave);
+        form.add(new JLabel("Chest Every (kills)")); form.add(fChestEvery);
+        form.add(new JLabel("Sky Top Color")); form.add(skyTopBtn);
+        form.add(new JLabel("Sky Bottom Color")); form.add(skyBottomBtn);
+        form.add(new JLabel("Ground Color")); form.add(groundTopBtn);
+        form.add(new JLabel("Ground Stripe Color")); form.add(groundStripeBtn);
+
+        JButton save = new JButton("Save Settings");
+        save.addActionListener(e -> {
+            GRAVITY = parseDouble(fGravity.getText(), GRAVITY);
+            JUMP_VELOCITY = parseInt(fJump.getText(), JUMP_VELOCITY);
+            PLAYER_SPEED = parseInt(fSpeed.getText(), PLAYER_SPEED);
+            playerScale = parseDouble(fScale.getText(), playerScale);
+            PLAYER_MAX_HEALTH = parseInt(fMaxHealth.getText(), PLAYER_MAX_HEALTH);
+            AREA_COST = parseInt(fAreaCost.getText(), AREA_COST);
+            HELP_DISCOUNT = parseInt(fHelpDiscount.getText(), HELP_DISCOUNT);
+            START_MONEY = parseInt(fStartMoney.getText(), START_MONEY);
+            START_STEPS = parseInt(fStartSteps.getText(), START_STEPS);
+            DEFAULT_MONEY_MULTIPLIER = parseInt(fMultiplier.getText(), DEFAULT_MONEY_MULTIPLIER);
+            DEFAULT_MAX_MONEY_CAP = parseInt(fCap.getText(), DEFAULT_MAX_MONEY_CAP);
+            SPAWN_X = parseInt(fSpawnX.getText(), SPAWN_X);
+            SPAWN_Y = parseInt(fSpawnY.getText(), SPAWN_Y);
+            ENEMY_SPAWN_INTERVAL = parseInt(fSpawnInterval.getText(), (int) ENEMY_SPAWN_INTERVAL);
+            BOSS_WAVE_KILLS = parseInt(fBossWave.getText(), BOSS_WAVE_KILLS);
+            CHEST_EVERY = parseInt(fChestEvery.getText(), CHEST_EVERY);
+            SKY_TOP = skyTopBtn.getBackground();
+            SKY_BOTTOM = skyBottomBtn.getBackground();
+            GROUND_TOP = groundTopBtn.getBackground();
+            GROUND_STRIPE = groundStripeBtn.getBackground();
+            if (playerHealth > PLAYER_MAX_HEALTH) playerHealth = PLAYER_MAX_HEALTH;
+            if (playerMaxHealth > PLAYER_MAX_HEALTH) playerMaxHealth = PLAYER_MAX_HEALTH;
+            saveDevData();
+            if (paint != null) paint.repaint();
+            JOptionPane.showMessageDialog(frame, "Game settings saved. Start a new run for full effect.");
+        });
+        JPanel bottom = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
+        bottom.setOpaque(false);
+        bottom.add(save);
+        root.add(form, BorderLayout.CENTER);
+        root.add(bottom, BorderLayout.SOUTH);
+        return root;
+    }
+
+    static JPanel buildVipManagement(JFrame frame) {
+        JPanel root = new JPanel(new BorderLayout(10, 10));
+        root.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
+        root.setBackground(new Color(38, 41, 58));
+
+        JTextArea list = new JTextArea(8, 40);
+        list.setEditable(false);
+        list.setBackground(new Color(50, 54, 75));
+        list.setForeground(new Color(220, 225, 240));
+        list.setFont(new Font("Monospaced", Font.PLAIN, 13));
+
+        JPanel form = new JPanel(new GridLayout(0, 2, 8, 6));
+        form.setOpaque(false);
+        JTextField fUser = new JTextField();
+        JCheckBox fEnabled = new JCheckBox("VIP Enabled");
+        fEnabled.setOpaque(false);
+        JTextField fPerks = new JTextField();
+        form.add(new JLabel("Username")); form.add(fUser);
+        form.add(fEnabled); form.add(new JLabel(""));
+        form.add(new JLabel("Perks (comma)")); form.add(fPerks);
+
+        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
+        buttons.setOpaque(false);
+        JButton addBtn = new JButton("Add / Update VIP");
+        JButton removeBtn = new JButton("Remove VIP");
+        JButton refreshBtn = new JButton("Refresh List");
+        buttons.add(addBtn);
+        buttons.add(removeBtn);
+        buttons.add(refreshBtn);
+
+        Runnable updateList = () -> {
+            StringBuilder sb = new StringBuilder("VIP USERS\n---------\n");
+            for (Map.Entry<String, java.util.List<String>> e : vipUsers.entrySet()) {
+                sb.append(e.getKey()).append("  |  ").append(String.join(", ", e.getValue())).append("\n");
+            }
+            list.setText(sb.toString());
+        };
+
+        addBtn.addActionListener(e -> {
+            String nm = fUser.getText().trim();
+            if (nm.isEmpty()) {
+                JOptionPane.showMessageDialog(frame, "Enter a username.");
+                return;
+            }
+            String key = nm.toLowerCase();
+            if (fEnabled.isSelected()) {
+                java.util.List<String> perks = parsePerks(fPerks.getText());
+                vipUsers.put(key, perks);
+            } else {
+                vipUsers.remove(key);
+            }
+            saveDevData();
+            refreshVipList();
+            updateList.run();
+        });
+        removeBtn.addActionListener(e -> {
+            String key = fUser.getText().trim().toLowerCase();
+            if (vipUsers.remove(key) != null) {
+                saveDevData();
+                refreshVipList();
+                updateList.run();
+            }
+        });
+        refreshBtn.addActionListener(e -> updateList.run());
+
+        JPanel profForm = new JPanel(new GridLayout(0, 2, 8, 6));
+        profForm.setOpaque(false);
+        JTextField fProfName = new JTextField();
+        JTextField fProfPerks = new JTextField();
+        profForm.add(new JLabel("Profile Name")); profForm.add(fProfName);
+        profForm.add(new JLabel("Profile Perks (comma)")); profForm.add(fProfPerks);
+        JButton saveProfBtn = new JButton("Save Profile");
+        JButton applyProfBtn = new JButton("Apply Profile to User");
+        JPanel profButtons = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
+        profButtons.setOpaque(false);
+        profButtons.add(saveProfBtn);
+        profButtons.add(applyProfBtn);
+
+        saveProfBtn.addActionListener(e -> {
+            String nm = fProfName.getText().trim();
+            if (nm.isEmpty()) return;
+            vipProfiles.put(nm, fProfPerks.getText().trim());
+            saveDevData();
+            JOptionPane.showMessageDialog(frame, "Profile \"" + nm + "\" saved.");
+        });
+        applyProfBtn.addActionListener(e -> {
+            String nm = fProfName.getText().trim();
+            String user = fUser.getText().trim();
+            String perksStr = vipProfiles.get(nm);
+            if (user.isEmpty() || perksStr == null) {
+                JOptionPane.showMessageDialog(frame, "Enter a user and an existing profile name.");
+                return;
+            }
+            java.util.List<String> perks = parsePerks(perksStr);
+            vipUsers.put(user.toLowerCase(), perks);
+            fEnabled.setSelected(true);
+            fPerks.setText(perksStr);
+            saveDevData();
+            refreshVipList();
+            updateList.run();
+        });
+
+        JPanel north = new JPanel(new BorderLayout());
+        north.setOpaque(false);
+        north.add(form, BorderLayout.NORTH);
+        JPanel center = new JPanel(new BorderLayout(10, 10));
+        center.setOpaque(false);
+        center.add(buttons, BorderLayout.NORTH);
+        center.add(new JScrollPane(list), BorderLayout.CENTER);
+        JPanel south = new JPanel(new BorderLayout());
+        south.setOpaque(false);
+        south.add(profForm, BorderLayout.NORTH);
+        south.add(profButtons, BorderLayout.SOUTH);
+
+        root.add(north, BorderLayout.NORTH);
+        root.add(center, BorderLayout.CENTER);
+        root.add(south, BorderLayout.SOUTH);
+        return root;
+    }
+
+    static JPanel buildEmblems(JFrame frame) {
+        JPanel root = new JPanel(new BorderLayout(10, 10));
+        root.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
+        root.setBackground(new Color(38, 41, 58));
+
+        DefaultListModel<String> model = new DefaultListModel<>();
+        JList<String> emblemList = new JList<>(model);
+        Runnable refresh = () -> {
+            model.clear();
+            for (Map.Entry<String, String> e : emblems.entrySet()) {
+                model.addElement(e.getValue() + "  " + e.getKey());
+            }
+        };
+
+        JPanel form = new JPanel(new GridLayout(0, 2, 8, 6));
+        form.setOpaque(false);
+        JTextField fEmblemName = new JTextField();
+        JTextField fEmblemSymbol = new JTextField();
+        JTextField fUser = new JTextField();
+        form.add(new JLabel("Emblem Name")); form.add(fEmblemName);
+        form.add(new JLabel("Symbol (1-2 chars)")); form.add(fEmblemSymbol);
+        form.add(new JLabel("Assign To User")); form.add(fUser);
+
+        JButton createBtn = new JButton("Create Emblem");
+        JButton assignBtn = new JButton("Assign Emblem");
+        JButton renameBtn = new JButton("Rename Selected");
+        JButton removeBtn = new JButton("Remove Selected");
+        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
+        buttons.setOpaque(false);
+        buttons.add(createBtn);
+        buttons.add(assignBtn);
+        buttons.add(renameBtn);
+        buttons.add(removeBtn);
+
+        createBtn.addActionListener(e -> {
+            String nm = fEmblemName.getText().trim();
+            String sym = fEmblemSymbol.getText().trim();
+            if (nm.isEmpty() || sym.isEmpty()) {
+                JOptionPane.showMessageDialog(frame, "Enter a name and a symbol.");
+                return;
+            }
+            emblems.put(nm, sym);
+            saveDevData();
+            refresh.run();
+        });
+        assignBtn.addActionListener(e -> {
+            String user = fUser.getText().trim();
+            String em = fEmblemName.getText().trim();
+            if (user.isEmpty() || !emblems.containsKey(em)) {
+                JOptionPane.showMessageDialog(frame, "Enter a user and an existing emblem name.");
+                return;
+            }
+            userEmblems.put(user.toLowerCase(), em);
+            saveDevData();
+            refreshVipList();
+            JOptionPane.showMessageDialog(frame, "Assigned " + em + " to " + user + ".");
+        });
+        renameBtn.addActionListener(e -> {
+            int idx = emblemList.getSelectedIndex();
+            if (idx < 0) return;
+            String oldName = new ArrayList<>(emblems.keySet()).get(idx);
+            String newName = JOptionPane.showInputDialog(frame, "New name for \"" + oldName + "\":", oldName);
+            if (newName == null || newName.trim().isEmpty()) return;
+            String sym = emblems.remove(oldName);
+            emblems.put(newName.trim(), sym);
+            for (Map.Entry<String, String> ue : new HashMap<>(userEmblems).entrySet()) {
+                if (ue.getValue().equals(oldName)) userEmblems.put(ue.getKey(), newName.trim());
+            }
+            saveDevData();
+            refresh.run();
+        });
+        removeBtn.addActionListener(e -> {
+            int idx = emblemList.getSelectedIndex();
+            if (idx < 0) return;
+            String nm = new ArrayList<>(emblems.keySet()).get(idx);
+            emblems.remove(nm);
+            userEmblems.values().removeIf(v -> v.equals(nm));
+            saveDevData();
+            refresh.run();
+            refreshVipList();
+        });
+
+        root.add(new JScrollPane(emblemList), BorderLayout.CENTER);
+        JPanel bottom = new JPanel(new BorderLayout());
+        bottom.setOpaque(false);
+        bottom.add(form, BorderLayout.NORTH);
+        bottom.add(buttons, BorderLayout.SOUTH);
+        root.add(bottom, BorderLayout.SOUTH);
+        refresh.run();
+        return root;
+    }
+
+    static void copyFile(File src, File dst) {
+        try (InputStream in = new FileInputStream(src); OutputStream out = new FileOutputStream(dst)) {
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+        } catch (Exception ignored) {
+        }
+    }
+
+    static JPanel buildSaveSystem(JFrame frame) {
+        JPanel root = new JPanel(new BorderLayout(10, 10));
+        root.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
+        root.setBackground(new Color(38, 41, 58));
+
+        JLabel status = new JLabel(" ");
+        status.setForeground(new Color(140, 220, 170));
+        status.setFont(new Font("Arial", Font.PLAIN, 13));
+
+        JButton saveBtn = new JButton("Save Game Data");
+        JButton backupBtn = new JButton("Backup Save");
+        JButton restoreBtn = new JButton("Restore Save");
+        JButton exportBtn = new JButton("Export Settings");
+        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
+        buttons.setOpaque(false);
+        buttons.add(saveBtn);
+        buttons.add(backupBtn);
+        buttons.add(restoreBtn);
+        buttons.add(exportBtn);
+
+        String[] files = {
+            "friendrun_player.txt", "friendrun_leaderboard.txt", "friendrun_friends.txt",
+            "friendrun_weapons.txt", "friendrun_level.txt", "friendrun_vips.txt",
+            "friendrun_vip_profiles.txt", "friendrun_emblems.txt", "friendrun_user_emblems.txt",
+            "friendrun_player_records.txt", "friendrun_settings.txt"
+        };
+
+        saveBtn.addActionListener(e -> {
+            saveData();
+            saveDevData();
+            status.setText("Game data saved.");
+        });
+        backupBtn.addActionListener(e -> {
+            String stamp = new java.text.SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+            File bdir = new File("backups");
+            bdir.mkdirs();
+            int n = 0;
+            for (String f : files) {
+                File src = new File(f);
+                if (src.exists()) {
+                    copyFile(src, new File(bdir, stamp + "_" + f));
+                    n++;
+                }
+            }
+            status.setText("Backed up " + n + " files to backups/");
+        });
+        restoreBtn.addActionListener(e -> {
+            JFileChooser fc = new JFileChooser(new File("backups"));
+            fc.setDialogTitle("Choose a backup file to restore");
+            if (fc.showOpenDialog(frame) != JFileChooser.APPROVE_OPTION) return;
+            File f = fc.getSelectedFile();
+            String nm = f.getName();
+            int underscore = nm.indexOf('_');
+            String target = underscore >= 0 ? nm.substring(underscore + 1) : nm;
+            copyFile(f, new File(target));
+            loadData();
+            refreshVipList();
+            refreshLeaderboard();
+            startPointsLabel.setText("Points: " + playerPoints);
+            status.setText("Restored " + target + " from backup.");
+        });
+        exportBtn.addActionListener(e -> {
+            try {
+                PrintWriter w = new PrintWriter(new FileWriter("friendrun_dev_export.txt"));
+                w.println("== FRIENDRUN DEVELOPER EXPORT ==");
+                w.println();
+                w.println("--- GAME SETTINGS ---");
+                w.println("Gravity = " + GRAVITY);
+                w.println("Jump = " + JUMP_VELOCITY);
+                w.println("Speed = " + PLAYER_SPEED);
+                w.println("Size % = " + playerScale);
+                w.println("Max Health = " + PLAYER_MAX_HEALTH);
+                w.println("Area Cost = " + AREA_COST);
+                w.println("Help Discount = " + HELP_DISCOUNT);
+                w.println("Start Money = " + START_MONEY);
+                w.println("Start Steps = " + START_STEPS);
+                w.println("Money Multiplier = " + DEFAULT_MONEY_MULTIPLIER);
+                w.println("Money Cap = " + DEFAULT_MAX_MONEY_CAP);
+                w.println("Spawn = (" + SPAWN_X + ", " + SPAWN_Y + ")");
+                w.println("Spawn Interval = " + ENEMY_SPAWN_INTERVAL);
+                w.println("Boss Every = " + BOSS_WAVE_KILLS);
+                w.println("Chest Every = " + CHEST_EVERY);
+                w.println();
+                w.println("--- VIP USERS ---");
+                for (Map.Entry<String, java.util.List<String>> e2 : vipUsers.entrySet()) {
+                    w.println(e2.getKey() + " | " + String.join(", ", e2.getValue()));
+                }
+                w.println();
+                w.println("--- EMBLEMS ---");
+                for (Map.Entry<String, String> e2 : emblems.entrySet()) {
+                    w.println(e2.getKey() + " = " + e2.getValue());
+                }
+                w.println();
+                w.println("--- ASSIGNMENTS ---");
+                for (Map.Entry<String, String> e2 : userEmblems.entrySet()) {
+                    w.println(e2.getKey() + " = " + e2.getValue());
+                }
+                w.close();
+                status.setText("Exported to friendrun_dev_export.txt");
+            } catch (Exception ex) {
+                status.setText("Export failed: " + ex.getMessage());
+            }
+        });
+
+        root.add(buttons, BorderLayout.NORTH);
+        root.add(status, BorderLayout.CENTER);
+        return root;
     }
 }

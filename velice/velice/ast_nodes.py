@@ -189,6 +189,32 @@ class TypeAlias(Node):
 class Program(Node):
     stmts: list = field(default_factory=list); source: str = ""
 
+# ── Expressions ───────────────────────────────────────────────────────────
+@dataclass(frozen=True)
+class ParenExpr(Node):
+    inner: Node
+
+@dataclass(frozen=True)
+class ThunkExpr(Node):
+    """Deferred callable value: `var f = (expr)` -> `f()` runs expr."""
+    expr: Node
+
+# ── GUI ────────────────────────────────────────────────────────────────
+@dataclass(frozen=True)
+class WindowDecl(Node):
+    name: str; props: list = field(default_factory=list); children: list = field(default_factory=list)
+
+@dataclass(frozen=True)
+class WidgetNode(Node):
+    wtype: str; wname: Any = None
+    props: list = field(default_factory=list)
+    events: list = field(default_factory=list)
+    children: list = field(default_factory=list)
+
+@dataclass(frozen=True)
+class RunStmt(Node):
+    name: str
+
 # ── Patterns ─────────────────────────────────────────────────────────────
 @dataclass(frozen=True)
 class LitPattern(Node):

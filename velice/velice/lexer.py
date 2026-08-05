@@ -10,7 +10,7 @@ class TT(enum.Enum):
     # Identifier
     IDENT = "IDENT"
     # Keywords
-    FN="fn"; LET="let"; MUT="mut"; CONST="const"; CLASS="class"; STRUCT="struct"
+    FN="fn"; LET="let"; VAR="var"; MUT="mut"; CONST="const"; CLASS="class"; STRUCT="struct"
     ENUM="enum"; TRAIT="trait"; IMPL="impl"; MATCH="match"; IF="if"; ELIF="elif"
     ELSE="else"; WHILE="while"; FOR="for"; IN="in"; LOOP="loop"; BREAK="break"
     CONTINUE="continue"; RETURN="return"; DEFER="defer"; YIELD="yield"
@@ -37,7 +37,7 @@ class TT(enum.Enum):
     INDENT="INDENT"; DEDENT="DEDENT"; NEWLINE="NEWLINE"; EOF="EOF"; ERROR="ERROR"
 
 KEYWORDS = {
-    "fn": TT.FN, "let": TT.LET, "mut": TT.MUT, "const": TT.CONST,
+    "fn": TT.FN, "let": TT.LET, "mut": TT.MUT, "var": TT.VAR, "const": TT.CONST,
     "class": TT.CLASS, "struct": TT.STRUCT, "enum": TT.ENUM, "trait": TT.TRAIT,
     "impl": TT.IMPL, "match": TT.MATCH, "if": TT.IF, "elif": TT.ELIF,
     "else": TT.ELSE, "while": TT.WHILE, "for": TT.FOR, "in": TT.IN,

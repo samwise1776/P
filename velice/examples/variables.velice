@@ -13,3 +13,14 @@ let is_ready = true        # bool
 let nothing = nil          # nil
 
 print(price, is_ready, nothing)
+
+# `var` is shorthand for a mutable binding
+var v = 10
+v = v + 5
+print("var:", v)
+
+# Variable code: `var f = (expr)` stores deferred code, run on `f()`
+var greet = (print("hello from a thunk"))
+greet()
+var f = (6 * 7)
+print("thunk:", f())

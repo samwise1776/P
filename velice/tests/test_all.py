@@ -12,6 +12,7 @@ sys.path.insert(0, ROOT)
 from velice.lexer import Lexer, TT  # noqa: E402
 from velice.parser import Parser  # noqa: E402
 from velice.interpreter import Interpreter, VeliceError  # noqa: E402
+from velice import ast_nodes as A  # noqa: E402
 
 
 def run(code):
@@ -67,6 +68,24 @@ class TestParser(unittest.TestCase):
         self.assertEqual(decl.name, 'add')
         self.assertEqual([p.name for p in decl.params], ['a', 'b'])
 
+    def test_var_decl(self):
+        ast = Parser(Lexer('var a = "Hello"').tokenize(), 'var a = "Hello"').parse()
+        decl = ast.stmts[0]
+        self.assertEqual(decl.name, 'a')
+        self.assertTrue(decl.mutable)
+
+    def test_var_thunk(self):
+        ast = Parser(Lexer('var a = (print("hi"))').tokenize(),
+                     'var a = (print("hi"))').parse()
+        self.assertIsInstance(ast.stmts[0].value, A.ThunkExpr)
+
+    def test_var_params(self):
+        ast = Parser(Lexer('fn calc(var a, var b) { return a + b }').tokenize(),
+                     'fn calc(var a, var b) { return a + b }').parse()
+        decl = ast.stmts[0]
+        self.assertEqual([p.name for p in decl.params], ['a', 'b'])
+        self.assertTrue(all(p.mutable for p in decl.params))
+
 
 class TestInterpreter(unittest.TestCase):
     def test_arithmetic(self):
@@ -77,6 +96,19 @@ class TestInterpreter(unittest.TestCase):
 
     def test_variables(self):
         self.assertEqual(run('let x = 5\nprint(x + 1)'), '6')
+
+    def test_var_keyword(self):
+        self.assertEqual(run('var a = "Hello"\nprint(a)'), 'Hello')
+
+    def test_var_thunk_runs_on_call(self):
+        self.assertEqual(run('var greet = (print("Hello from thunk"))\ngreet()\ngreet()'),
+                         'Hello from thunk\nHello from thunk')
+
+    def test_var_thunk_returns_value(self):
+        self.assertEqual(run('var f = (5 * 4)\nprint(f())'), '20')
+
+    def test_var_fn_params(self):
+        self.assertEqual(run('fn calc(var a, var b) { return a + b }\nprint(calc(2, 3))'), '5')
 
     def test_immutability(self):
         tokens = Lexer('let x = 5\nx = 6').tokenize()
